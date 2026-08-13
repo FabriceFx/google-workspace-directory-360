@@ -36,11 +36,11 @@ var I18N = {
   vueSupprimee:      ['Vue « {v} » supprimée', 'View “{v}” deleted'],
   choisirVue:        ['— appliquer une vue —', '— apply a view —'],
   // tuiles KPI
-  kpiTotal:          ['Comptes', 'Accounts'],
-  kpiSans2sv:        ['Actifs sans 2SV', 'Active w/o 2SV'],
-  kpiAdmins:         ['Administrateurs', 'Administrators'],
-  kpiJamais:         ['Jamais connectés', 'Never signed in'],
-  kpiSuspendus:      ['Suspendus', 'Suspended'],
+  kpiTotal:          ['Compte{s}', 'Account{s}'],
+  kpiSans2sv:        ['Actif{s} sans 2SV', 'Active w/o 2SV'],
+  kpiAdmins:         ['Admin{s}', 'Admin{s}'],
+  kpiJamais:         ['Jamais connecté{s}', 'Never logged in'],
+  kpiSuspendus:      ['Suspendu{s}', 'Suspended'],
   kpiAlertes:        ['Avec alerte', 'With alerts'],
   // onglet anomalies
   ongletAnomalies:   ['Anomalies', 'Anomalies'],
@@ -70,7 +70,7 @@ var I18N = {
   srcApi:            ['Admin SDK', 'Admin SDK'],
   srcDemo:           ['démonstration', 'demo data'],
   chargement:        ['chargement', 'loading'],
-  comptes:           ['comptes', 'accounts'],
+  comptes:           ['compte{s}', 'account{s}'],
   chemins:           ['chemins', 'paths'],
   cache:             ['cache', 'cached'],
   tranche:           ['tranche', 'batch'],
@@ -674,7 +674,7 @@ function renderFieldList(){
   var q = (document.getElementById('fieldSearch').value || '').toLowerCase();
   var list = S.catalog.filter(function(c){ return !q || c.path.toLowerCase().indexOf(q) !== -1; });
   document.getElementById('fieldCount').textContent =
-    list.length + ' / ' + S.catalog.length + ' ' + T('chemins') + ' · ' + nb(S.rows.length) + ' ' + T('comptes');
+    list.length + ' / ' + S.catalog.length + ' ' + T('chemins') + ' · ' + nb(S.rows.length) + ' ' + esc(T('comptes').replace('{s}', S.rows.length > 1 ? 's' : ''));
 
   var html = '', grp = '';
   list.forEach(function(c){
@@ -845,7 +845,7 @@ function renderCatalog(){
 function render(){
   if (S.mode === 'simple'){ renderSimple(); return; }
   document.getElementById('resCount').innerHTML =
-    '<b>' + nb(S.result.length) + '</b> / ' + nb(S.rows.length) + ' ' + T('comptes');
+    '<b>' + nb(S.result.length) + '</b> / ' + nb(S.rows.length) + ' ' + esc(T('comptes').replace('{s}', S.rows.length > 1 ? 's' : ''));
   if (S.tab === 'results') renderTable();
   if (S.tab === 'pivot') renderPivot();
   if (S.tab === 'catalog') renderCatalog();
@@ -1676,10 +1676,10 @@ function renderKpis(){
   var box = document.getElementById('kpis');
   if (!box) return;
   box.innerHTML = KPIS.map(function(k, i){
-    var n = 0;
-    S.rows.forEach(function(r){ if (k.test(r.f)) n++; });
-    return '<button class="kpi' + (k.alert && n > 0 ? ' alert' : '') + '" data-kpi="' + i + '">'
-         + '<b>' + nb(n) + '</b><span>' + esc(T(k.k)) + '</span></button>';
+    var v = 0;
+    S.rows.forEach(function(r){ if (k.test(r.f)) v++; });
+    return '<button class="kpi' + (k.alert && v > 0 ? ' alert' : '') + '" data-kpi="' + i + '">'
+         + '<b>' + nb(v) + '</b><span>' + esc(T(k.k).replace('{s}', v > 1 ? 's' : '')) + '</span></button>';
   }).join('');
 }
 
@@ -1901,7 +1901,7 @@ function finishLoad(){
   b.className = 'badge ' + (S.source === 'api' ? 'api' : 'demo');
   b.textContent = S.source === 'api' ? T('srcApi') : T('srcDemo');
   document.getElementById('topStat').innerHTML =
-    '<b>' + nb(S.rows.length) + '</b> ' + T('comptes') + ' · <b>' + S.catalog.length + '</b> ' + T('chemins') + ' · '
+    '<b>' + nb(S.rows.length) + '</b> ' + esc(T('comptes').replace('{s}', S.rows.length > 1 ? 's' : '')) + ' · <b>' + S.catalog.length + '</b> ' + T('chemins') + ' · '
     + (S.cachedAll ? T('cache') : (Date.now() - S.t0) + ' ms') + ' · ' + S.batches + ' ' + (S.batches > 1 ? T('tranches') : T('tranche'));
 
   if (S.warning) banner('warn', S.warning);
