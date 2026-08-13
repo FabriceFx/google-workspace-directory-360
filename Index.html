@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<script>
+/* ===========================================================================
+   CONFIGURATION — le seul bloc à modifier pour installer l'outil sur un autre
+   environnement Google Workspace. Tout le reste est découvert à l'exécution.
+   =========================================================================== */
+var BRAND = {
+  nom:        'Annuaire',
+  suffixe:    '360°',
+  couleur:    '#1a73e8',   // Google Blue
+  couleurF:   '#174ea6',   // Google Dark Blue
+  accent:     '#ea4335',   // Google Red
+  accentTxt:  '#c5221f',   // Google Dark Red
+  police:     "'Inter', 'Google Sans', Roboto, Arial, sans-serif",
+  policeFixe: "'Roboto Mono', monospace",
+  polices:    'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap',
+
+  /* Valeurs de remplissage saisies à la main en guise de « vide ». Elles
+     varient d'un domaine à l'autre : « Aucune », « N/A », « Néant »… Le
+     préréglage « Champ non attribué » s'appuie sur cette liste. */
+  remplissage: ['Aucune', 'Aucun', 'N/A', 'NA', 'Néant', 'Non renseigné', '-'],
+
+  /* Garde-fous du mode simple : un domaine avec 20 schémas de 30 champs
+     produirait une liste déroulante inutilisable. */
+  maxChampsParSchema: 12,
+  maxChampsPersoTotal: 60
+};
+
+(function(){
+  var r = document.documentElement.style;
+  r.setProperty('--bleu', BRAND.couleur);
+  r.setProperty('--bleu-fonce', BRAND.couleurF);
+  r.setProperty('--rose', BRAND.accent);
+  r.setProperty('--rose-txt', BRAND.accentTxt);
+  r.setProperty('--sans', BRAND.police);
+  r.setProperty('--mono', BRAND.policeFixe);
+  if (BRAND.polices){
+    var l = document.createElement('link');
+    l.rel = 'stylesheet'; l.href = BRAND.polices;
+    document.head.appendChild(l);
+  }
+  document.title = BRAND.nom + ' ' + BRAND.suffixe;
+})();
+</script>
+<?!= include('Stylesheet'); ?>
+</head>
+<body>
+
+<div class="loader" id="loader">
+  <div class="dots"><i></i><i></i><i></i><i></i></div>
+  <div id="loadTxt"></div>
+  <div class="pbar"><i id="loadBar"></i></div>
+</div>
+
+<header class="top">
+  <div class="carre"><i></i><i></i><i></i><i></i></div>
+  <div class="brand" id="brand"><span id="ver">v<?= CFG.VERSION ?></span></div>
+  <span class="badge demo" id="srcBadge" data-i18n="chargement">chargement</span>
+  <div class="seg langsw" id="langsw"><button class="sg" data-lang="fr">FR</button><button class="sg" data-lang="en">EN</button></div>
+  <div class="modesw">
+    <button class="ms on" data-mode="simple" data-i18n="modeSimple">Recherche simple</button>
+    <button class="ms" data-mode="expert" data-i18n="modeExpert">Mode expert</button>
+  </div>
+  <div class="grow"></div>
+  <div class="top-stat" id="topStat"></div>
+  <button class="tbtn" id="btnAbout" data-i18n="aPropos">À propos</button>
+  <button class="tbtn" id="btnRefresh" data-i18n="recharger">↻ Recharger</button>
+  <button class="tbtn" id="btnSheet" data-i18n="exportSheet">↗ Google Sheets</button>
+  <button class="tbtn primary" id="btnExport" data-i18n="exportCsv">↓ Export CSV</button>
+</header>
+
+<div class="toolbar">
+  <label class="tlbl" for="ouFilter" data-i18n="uniteOrg">Unité organisationnelle</label>
+  <select class="tsel" id="ouFilter"><option value=""></option></select>
+  <label class="tchk"><input type="checkbox" id="showDeleted"> <span data-i18n="comptesSupprimes">Comptes supprimés (≤ 20 j)</span></label>
+  <div class="grow"></div>
+  <label class="tlbl" for="viewsSel" data-i18n="mesVues">Mes vues</label>
+  <select class="tsel" id="viewsSel"><option value=""></option></select>
+  <button class="btn" id="viewSave" data-i18n="enregistrerVue">💾 Enregistrer la vue</button>
+  <button class="btn" id="viewDel" data-i18n="supprimerVue">Supprimer</button>
+</div>
+
+<div id="banners"></div>
+
+<section id="simpleUI">
+  <div class="swrap">
+
+    <header class="shead">
+      <h1 data-i18n="queCherches">Que cherches-tu ?</h1>
+      <p data-i18n="queCherchesSous">Choisis une question courante…</p>
+    </header>
+
+    <div class="kpis" id="kpis"></div>
+
+    <div class="qcards" id="qcards"></div>
+
+    <section class="sblock">
+      <div class="ttl" data-i18n="construire">Construire ma question</div>
+      <div id="sRows" class="srows"></div>
+      <div class="sactions">
+        <button class="btn" id="sAdd" data-i18n="ajouterCritere">+ Ajouter un critère</button>
+        <button class="btn" id="sClear" data-i18n="toutEffacer">Tout effacer</button>
+        <span class="slogic" id="sLogic"></span>
+      </div>
+    </section>
+
+    <section class="sblock" id="sResBlock">
+      <div class="sresh">
+        <div class="ttl" id="sCount" data-i18n="resultats">Résultats</div>
+        <div class="grow"></div>
+        <button class="btn" id="sCols"></button>
+        <button class="btn" id="sCsv" data-i18n="exportCsv">↓ Export CSV</button>
+        <button class="btn" id="sSheet" data-i18n="exportSheet">↗ Google Sheets</button>
+        <button class="btn" id="sExp" data-i18n="ouvrirExpert">Ouvrir en mode expert →</button>
+      </div>
+      <div id="sColsPanel" class="cpanel" hidden></div>
+      <div id="sTable"></div>
+      <div class="sbridge" id="sBridge"></div>
+    </section>
+
+  </div>
+</section>
+
+<div class="layout" id="expertUI">
+
+  <aside class="side sb-dark">
+    <div class="side-h">
+      <h2 class="ttl" data-i18n="catalogue">Catalogue des champs</h2>
+      <p id="fieldCount">—</p>
+      <input class="side-search" id="fieldSearch" data-i18n-ph="filtrerChemin">
+    </div>
+    <div class="side-list sb-dark" id="fieldList"></div>
+    <div class="side-f">
+      <button class="chipbtn" data-cols="identite" data-i18n="jeuIdentite">Identité</button>
+      <button class="chipbtn" data-cols="rh" data-i18n="jeuPerso">Champs perso.</button>
+      <button class="chipbtn" data-cols="secu" data-i18n="jeuSecu">Sécurité</button>
+      <button class="chipbtn" data-cols="loc" data-i18n="jeuLoc">Localisation</button>
+      <button class="chipbtn" data-cols="alertes" data-i18n="jeuAlertes">Alertes</button>
+      <button class="chipbtn" data-cols="clear" data-i18n="jeuVider">Vider</button>
+    </div>
+  </aside>
+
+  <div class="main">
+
+    <section class="query">
+      <div class="qrow1">
+        <div class="search">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+          <input id="globalSearch" data-i18n-ph="rechercheLibre">
+        </div>
+        <button class="btn" id="btnAddFilter" data-i18n="ajouterFiltre">+ Filtre</button>
+        <div class="seg" id="segLogic" data-i18n-ti="combinaison"><button class="sg on" data-lg="AND" data-i18n="et">ET</button><button class="sg" data-lg="OR" data-i18n="ou">OU</button></div>
+        <button class="btn" id="btnReset" data-i18n="reinitialiser">Réinitialiser</button>
+      </div>
+      <div class="presets" id="presets"></div>
+      <div class="filters" id="filters"></div>
+    </section>
+
+    <nav class="tabs">
+      <button class="tab on" data-tab="results" data-i18n="ongletResultats">Résultats</button>
+      <button class="tab" data-tab="pivot" data-i18n="ongletRepartition">Répartition</button>
+      <button class="tab" data-tab="catalog" data-i18n="ongletCatalogue">Champs détectés</button>
+      <button class="tab" data-tab="anomalies" data-i18n="ongletAnomalies">Anomalies</button>
+      <div class="grow"></div>
+      <span class="count" id="resCount"></span>
+      <select id="pageSize">
+        <option value="50" data-pp="50">50</option>
+        <option value="100" data-pp="100">100</option>
+        <option value="250" data-pp="250">250</option>
+        <option value="1000" data-pp="1000">1000</option>
+        <option value="99999" data-i18n="tout">Tout</option>
+      </select>
+    </nav>
+
+    <div class="view" id="viewResults"></div>
+    <div class="view pad" id="viewPivot" style="display:none"></div>
+    <div class="view pad" id="viewCatalog" style="display:none"></div>
+    <div class="view pad" id="viewAnomalies" style="display:none"></div>
+
+  </div>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer">
+  <div class="dh">
+    <div class="av" id="dAv"></div>
+    <div style="flex:1;min-width:0">
+      <h3 id="dName">—</h3>
+      <p id="dMail">—</p>
+    </div>
+    <button class="btn" id="dCopy" data-i18n="copierJson">Copier JSON</button>
+    <button class="x" id="dClose">✕</button>
+  </div>
+  <div class="dtabs">
+    <button class="tab on" data-dtab="flat" data-i18n="champsAplatis">Champs aplatis</button>
+    <button class="tab" data-dtab="json" data-i18n="jsonBrut">JSON brut</button>
+  </div>
+  <div class="dbody" id="dBody"></div>
+</aside>
+
+<div class="modal-overlay" id="modalAbout">
+  <div class="modal">
+    <h2><span data-i18n="appNom">Annuaire</span> <span>360°</span></h2>
+    <p data-i18n="appDesc">Explorateur complet et instantané de champs Google Workspace (Admin SDK Directory). Visualisez et filtrez l'intégralité des données de votre domaine sans restriction.</p>
+    <div class="dev">
+      <div class="dev-info">
+        <strong data-i18n="developpePar">Développé par</strong>
+        <a href="https://faucheux.bzh" target="_blank">Fabrice Faucheux</a>
+      </div>
+    </div>
+    <div class="journal">
+      <button class="btn" id="btnJournal" data-i18n="journalUsage">Journal d'usage</button>
+      <div id="usageLog"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="modal-btn" id="btnAboutClose" data-i18n="fermer">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<datalist id="dlFields"></datalist>
+<datalist id="dlValues"></datalist>
+
+<?!= include('Script'); ?>
+</body>
+</html>

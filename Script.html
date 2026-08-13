@@ -1,0 +1,2134 @@
+<script>
+/* ==========================================================================
+ *  ÉTAT
+ * ======================================================================== */
+var S = {
+  raw: [], rows: [], catalog: [], byPath: {},
+  cols: ['primaryEmail','name.fullName','organizations.department','organizations.title','suspended','lastLoginTime'],
+  filters: [], logic: 'AND', search: '',
+  sort: { path: 'primaryEmail', dir: 1 },
+  page: 1, pageSize: 50, result: [], tab: 'results', dtab: 'flat',
+  current: null, source: '', meta: {}, schemas: [],
+  warning: '', batches: 0, cachedAll: false, maxUsers: 9000, t0: 0, legacyTried: false,
+  mode: 'simple', simpleCols: [], questionCols: [], colsManuelles: false, simpleShown: 25, labelPath: [],
+  orgUnit: '', showDeleted: false, views: {}, anomalies: null
+};
+
+/* ==========================================================================
+ *  LANGUES
+ *  Le français et l'anglais cohabitent dans une table unique : une clé, deux
+ *  valeurs. La langue initiale suit celle du compte Google, puis le choix de
+ *  l'utilisateur. Aucune chaîne visible n'est écrite ailleurs.
+ * ======================================================================== */
+var LANG = 'fr';
+var I18N = {
+  locale:            ['fr-FR', 'en-GB'],
+  chargementIncomplet: ['Chargement incomplet : seuls {n} comptes ont pu être chargés.', 'Incomplete load: only {n} accounts could be loaded.'],
+  // barre d'outils
+  uniteOrg:          ['Unité org.', 'Org unit'],
+  toutesOU:          ['Toutes', 'All'],
+  comptesSupprimes:  ['Comptes supprimés (≤ 20 j)', 'Deleted accounts (≤ 20 d)'],
+  mesVues:           ['Mes vues', 'My views'],
+  enregistrerVue:    ['💾 Enregistrer la vue', '💾 Save view'],
+  supprimerVue:      ['Supprimer', 'Delete'],
+  nomVue:            ['Nom de la vue :', 'View name:'],
+  vueEnregistree:    ['Vue « {v} » enregistrée', 'View “{v}” saved'],
+  vueSupprimee:      ['Vue « {v} » supprimée', 'View “{v}” deleted'],
+  choisirVue:        ['— appliquer une vue —', '— apply a view —'],
+  // tuiles KPI
+  kpiTotal:          ['Comptes', 'Accounts'],
+  kpiSans2sv:        ['Actifs sans 2SV', 'Active w/o 2SV'],
+  kpiAdmins:         ['Administrateurs', 'Administrators'],
+  kpiJamais:         ['Jamais connectés', 'Never signed in'],
+  kpiSuspendus:      ['Suspendus', 'Suspended'],
+  kpiAlertes:        ['Avec alerte', 'With alerts'],
+  // onglet anomalies
+  ongletAnomalies:   ['Anomalies', 'Anomalies'],
+  anomNom:           ['Nom complet en double', 'Duplicate full name'],
+  anomTel:           ['Téléphone partagé', 'Shared phone number'],
+  anomRecovery:      ['E-mail de secours partagé', 'Shared recovery e-mail'],
+  anomMgrAbsent:     ['Manager introuvable dans l\'annuaire', 'Manager not found in directory'],
+  anomMgrSuspendu:   ['Manager suspendu', 'Suspended manager'],
+  anomAucune:        ['Aucune anomalie détectée sur les comptes chargés.', 'No anomaly detected in the loaded accounts.'],
+  anomComptes:       ['{n} compte(s)', '{n} account(s)'],
+  // journal d'usage
+  journalUsage:      ['Journal d\'usage', 'Usage log'],
+  journalVide:       ['Journal vide.', 'Empty log.'],
+  actLoad:           ['chargement', 'load'],
+  actExport:         ['export', 'export'],
+  actSheet:          ['export Sheets', 'Sheets export'],
+  // export Google Sheets
+  exportSheet:       ['↗ Google Sheets', '↗ Google Sheets'],
+  exportSheetEnCours:['Création du classeur Google Sheets…', 'Creating the Google Sheets file…'],
+  exportSheetOk:     ['Classeur créé et partagé en lecture :', 'Spreadsheet created and shared (view access):'],
+  // barre supérieure
+  aPropos:           ['À propos', 'About'],
+  recharger:         ['↻ Recharger', '↻ Reload'],
+  exportCsv:         ['↓ Export CSV', '↓ Export CSV'],
+  modeSimple:        ['Recherche simple', 'Quick search'],
+  modeExpert:        ['Mode expert', 'Expert mode'],
+  srcApi:            ['Admin SDK', 'Admin SDK'],
+  srcDemo:           ['démonstration', 'demo data'],
+  chargement:        ['chargement', 'loading'],
+  comptes:           ['comptes', 'accounts'],
+  chemins:           ['chemins', 'paths'],
+  cache:             ['cache', 'cached'],
+  tranche:           ['tranche', 'batch'],
+  tranches:          ['tranches', 'batches'],
+  // modal à propos
+  appNom:            ['Annuaire', 'Directory'],
+  appDesc:           ['Explorateur complet et instantané de champs Google Workspace (Admin SDK Directory). Visualisez et filtrez l\'intégralité des données de votre domaine sans restriction.', 'Complete and instant Google Workspace fields explorer (Admin SDK Directory). View and filter all your domain data without restriction.'],
+  developpePar:      ['Développé par', 'Developed by'],
+  fermer:            ['Fermer', 'Close'],
+  // catalogue
+  catalogue:         ['Catalogue des champs', 'Field catalogue'],
+  filtrerChemin:     ['filtrer un chemin… ex. custom, phone, 2sv', 'filter a path… e.g. custom, phone, 2sv'],
+  aucunChemin:       ['Aucun chemin.', 'No matching path.'],
+  jeuIdentite:       ['Identité', 'Identity'],
+  jeuPerso:          ['Champs perso.', 'Custom fields'],
+  jeuSecu:           ['Sécurité', 'Security'],
+  jeuLoc:            ['Localisation', 'Location'],
+  jeuAlertes:        ['Alertes', 'Alerts'],
+  jeuVider:          ['Vider', 'Clear'],
+  // zone de requête
+  rechercheLibre:    ['Recherche libre dans tous les champs de tous les comptes…', 'Free-text search across every field of every account…'],
+  ajouterFiltre:     ['+ Filtre', '+ Filter'],
+  reinitialiser:     ['Réinitialiser', 'Reset'],
+  combinaison:       ['Combinaison des critères', 'How criteria combine'],
+  et:                ['ET', 'AND'],
+  ou:                ['OU', 'OR'],
+  ou_min:            ['ou', 'or'],
+  et_min:            ['et', 'and'],
+  oux:               ['OÙ', 'WHERE'],
+  cheminDuChamp:     ['chemin du champ', 'field path'],
+  valeur:            ['valeur', 'value'],
+  // onglets
+  ongletResultats:   ['Résultats', 'Results'],
+  ongletRepartition: ['Répartition', 'Breakdown'],
+  ongletCatalogue:   ['Champs détectés', 'Detected fields'],
+  parPage:           ['/ page', '/ page'],
+  tout:              ['Tout (lent au-delà de 2 000)', 'All (slow beyond 2,000)'],
+  // tableau
+  vrai:              ['vrai', 'yes'],
+  faux:              ['faux', 'no'],
+  jamais:            ['jamais', 'never'],
+  aucunResultatT:    ['Aucun compte ne correspond', 'No account matches'],
+  aucunResultatD:    ['Ajuste un filtre, ou repars d\'un préréglage ci-dessus.', 'Adjust a filter, or start again from a preset above.'],
+  precedent:         ['‹ Précédent', '‹ Previous'],
+  suivant:           ['Suivant ›', 'Next ›'],
+  page:              ['page', 'page'],
+  // répartition
+  repartitionPar:    ['Répartition par', 'Breakdown by'],
+  calculeeSur:       ['calculée sur les {n} comptes filtrés · {d} valeurs distinctes', 'computed on the {n} filtered accounts · {d} distinct values'],
+  colValeur:         ['Valeur', 'Value'],
+  colComptes:        ['Comptes', 'Accounts'],
+  colPoids:          ['Poids', 'Share'],
+  nonRenseigne:      ['(non renseigné)', '(not set)'],
+  // catalogue détaillé
+  colChemin:         ['Chemin', 'Path'],
+  colType:           ['Type', 'Type'],
+  colRenseigne:      ['Renseigné', 'Filled'],
+  colDistinctes:     ['Distinctes', 'Distinct'],
+  colFrequentes:     ['Valeurs les plus fréquentes', 'Most frequent values'],
+  colonne:           ['Colonne', 'Column'],
+  nonPeuple:         ['non peuplé', 'not populated'],
+  // fiche
+  champsAplatis:     ['Champs aplatis', 'Flattened fields'],
+  jsonBrut:          ['JSON brut', 'Raw JSON'],
+  copierJson:        ['Copier JSON', 'Copy JSON'],
+  jsonCopie:         ['JSON copié', 'JSON copied'],
+  copieImpossible:   ['Copie impossible dans ce navigateur', 'Copy not available in this browser'],
+  // mode simple
+  queCherches:       ['Que cherches-tu ?', 'What are you looking for?'],
+  queCherchesSous:   ['Choisis une question courante, ou construis la tienne. Aucune syntaxe à connaître.', 'Pick a common question, or build your own. No syntax required.'],
+  construire:        ['Construire ma question', 'Build my question'],
+  ajouterCritere:    ['+ Ajouter un critère', '+ Add a criterion'],
+  toutEffacer:       ['Tout effacer', 'Clear all'],
+  correspondSi:      ['Un compte correspond s\'il remplit', 'An account matches if it meets'],
+  tousCriteres:      ['tous les critères', 'all criteria'],
+  auMoinsUn:         ['au moins un critère', 'at least one criterion'],
+  lesComptesDont:    ['Les comptes dont', 'Accounts whose'],
+  choisir:           ['— choisir —', '— choose —'],
+  oui:               ['Oui', 'Yes'],
+  non:               ['Non', 'No'],
+  dansAnnuaire:      ['dans l\'annuaire', 'in the directory'],
+  nbJours:           ['nombre de jours', 'number of days'],
+  saisirValeur:      ['saisir une valeur', 'type a value'],
+  aucunCritere:      ['Aucun critère : les {n} comptes de l\'annuaire sont affichés.', 'No criteria: all {n} accounts are listed.'],
+  resultats:         ['Résultats', 'Results'],
+  colonnes:          ['Colonnes ({n})', 'Columns ({n})'],
+  colonnesTitre:     ['Colonnes affichées', 'Displayed columns'],
+  colonnesAide:      ['Coche les informations à afficher. Le mode expert donne accès aux {c} champs de l\'annuaire.', 'Tick the information to display. Expert mode gives access to all {c} directory fields.'],
+  colonnesReinit:    ['Rétablir les colonnes conseillées', 'Restore suggested columns'],
+  colonnesMax:       ['{n} colonnes affichées — au-delà, le tableau devient difficile à lire.', '{n} columns shown — beyond that the table gets hard to read.'],
+  colonneAutre:      ['Autres', 'Other'],
+  ouvrirExpert:      ['Ouvrir en mode expert →', 'Open in expert mode →'],
+  compteSur:         ['{n} compte{s} sur {t}', '{n} account{s} of {t}'],
+  aucunResultat:     ['Aucun résultat', 'No results'],
+  aucunResultatAide: ['Aucun compte ne correspond. Retire un critère, ou remplace « est » par « contient ».', 'No account matches. Remove a criterion, or replace “is” with “contains”.'],
+  critereACompleter: ['Critère à compléter', 'Criterion to complete'],
+  choisisValeur:     ['Choisis une valeur pour « {c} » : tous les comptes sont affichés en attendant.', 'Choose a value for “{c}”: all accounts are shown in the meantime.'],
+  afficherPlus:      ['Afficher 25 de plus ({n} restants)', 'Show 25 more ({n} remaining)'],
+  pontAvec:          ['Même question en mode expert :', 'Same question in expert mode:'],
+  pontSans:          ['Le mode expert permet de filtrer sur les {c} champs de l\'annuaire, pas seulement sur les {l} proposés ici.', 'Expert mode filters on all {c} directory fields, not just the {l} offered here.'],
+  aPreciser:         ['à préciser', 'to be specified'],
+  securite:          ['sécurité', 'security'],
+  menage:            ['ménage', 'housekeeping'],
+  annuaire:          ['annuaire', 'directory'],
+  qualiteDonnees:    ['qualité de données', 'data quality'],
+  // chargement et messages
+  connexion:         ['Connexion à l\'annuaire Google Workspace…', 'Connecting to the Google Workspace directory…'],
+  rechargementApi:   ['Rechargement depuis l\'API Admin SDK…', 'Reloading from the Admin SDK API…'],
+  comptesIndexes:    ['{n} comptes indexés…', '{n} accounts indexed…'],
+  constructionCat:   ['Construction du catalogue…', 'Building the catalogue…'],
+  chargementCompat:  ['Chargement en mode compatible…', 'Loading in compatibility mode…'],
+  echecChargement:   ['Échec du chargement : ', 'Loading failed: '],
+  reponseInvalide:   ['Réponse invalide.', 'Invalid response.'],
+  plafondAtteint:    ['Plafond atteint : {n} comptes chargés. Relève CFG.MAX_USERS dans Code.gs si le parc est plus grand.', 'Cap reached: {n} accounts loaded. Raise CFG.MAX_USERS in Code.gs if the estate is larger.'],
+  deploiementAncien: ['Le déploiement en service ne contient pas apiLoadBatch : republie une nouvelle version du projet (Déployer > Gérer les déploiements > crayon > Version : Nouvelle version). Chargement en mode compatible, sans découpage en tranches.', 'The live deployment does not include apiLoadBatch: publish a new version of the project (Deploy > Manage deployments > pencil > Version: New version). Loading in compatibility mode, without batching.'],
+  criteresHors:      ['{n} critère(s) portent sur des champs absents de la recherche simple ({p}). Ils restent actifs et modifiables en mode expert.', '{n} criterion/criteria target fields not available in quick search ({p}). They stay active and editable in expert mode.'],
+  repriseCriteres:   ['Requête reprise : {n} critère(s)', 'Query carried over: {n} criterion/criteria'],
+  lignesExportees:   ['{n} lignes exportées', '{n} rows exported'],
+  aucunExport:       ['Aucun compte à exporter', 'No account to export'],
+  demoCharge:        ['Admin SDK inaccessible ({e}). Jeu de démonstration chargé.', 'Admin SDK unavailable ({e}). Demo data loaded.'],
+  accesRefuse:       ['Accès refusé pour {u}. {r}', 'Access denied for {u}. {r}'],
+  erreurAdminSdk:    ['Admin SDK : {e}', 'Admin SDK: {e}'],
+  // groupes de champs
+  'grp.identite':    ['Identité', 'Identity'],
+  'grp.poste':       ['Poste', 'Position'],
+  'grp.contact':     ['Contact', 'Contact'],
+  'grp.localisation':['Localisation', 'Location'],
+  'grp.compte':      ['Compte', 'Account']
+};
+
+function T(k){
+  var e = I18N[k];
+  if (!e) return k;
+  return e[LANG === 'en' ? 1 : 0];
+}
+function TL(o){ return (LANG === 'en' && o.en) ? o.en : o.fr; }
+function LOC(){ return T('locale'); }
+function nb(n){ return Number(n).toLocaleString(LOC()); }
+
+/* Opérateurs du mode expert : jeton, libellé FR, libellé EN */
+var OPS = [
+  ['contains',  'contient',                   'contains'],
+  ['ncontains', 'ne contient pas',            'does not contain'],
+  ['eq',        'égal à',                     'equals'],
+  ['neq',       'différent de',               'not equal to'],
+  ['starts',    'commence par',               'starts with'],
+  ['ends',      'finit par',                  'ends with'],
+  ['in',        'dans la liste (a,b,c)',      'in list (a,b,c)'],
+  ['gt',        '>',                          '>'],
+  ['gte',       '≥',                          '≥'],
+  ['lt',        '<',                          '<'],
+  ['lte',       '≤',                          '≤'],
+  ['older',     'date de plus de … jours',    'date older than … days'],
+  ['newer',     'date de moins de … jours',   'date newer than … days'],
+  ['regex',     'expression régulière',       'regular expression'],
+  ['empty',     'est vide',                   'is empty'],
+  ['nempty',    'est renseigné',              'is set']
+];
+function opLabel(code){
+  var o = OPS.filter(function(x){ return x[0] === code; })[0];
+  return o ? o[LANG === 'en' ? 2 : 1] : code;
+}
+
+var PRESETS = [
+  // --- Sécurité & Accès ---
+  { g: {fr: 'Sécurité & Accès', en: 'Security & Access'}, fr:'Comptes suspendus',            en:'Suspended accounts',        f:[['suspended','eq','true']] },
+  { g: {fr: 'Sécurité & Accès', en: 'Security & Access'}, fr:'Sans validation 2 étapes',     en:'Without 2-step verification', f:[['isEnrolledIn2Sv','eq','false']] },
+  { g: {fr: 'Sécurité & Accès', en: 'Security & Access'}, fr:'2SV non imposée',              en:'2SV not enforced',          f:[['isEnforcedIn2Sv','eq','false']] },
+  { g: {fr: 'Sécurité & Accès', en: 'Security & Access'}, fr:'Administrateurs',              en:'Administrators',            f:[['isAdmin','eq','true'],['isDelegatedAdmin','eq','true']], logic:'OR' },
+  { g: {fr: 'Sécurité & Accès', en: 'Security & Access'}, fr:'Sans e-mail de secours',       en:'No recovery e-mail',        f:[['recoveryEmail','empty','']] },
+  { g: {fr: 'Sécurité & Accès', en: 'Security & Access'}, fr:'Récupération hors domaine',    en:'Off-domain recovery',       f:[['calc.recuperationExterne','eq','true']] },
+  { g: {fr: 'Sécurité & Accès', en: 'Security & Access'}, fr:'Mdp à changer',                en:'Password change required',  f:[['changePasswordAtNextLogin','eq','true']] },
+  { g: {fr: 'Sécurité & Accès', en: 'Security & Access'}, fr:'⚠ Admin sans 2SV',             en:'⚠ Admin without 2SV',       f:[['calc.alertes','eq','admin sans 2SV']] },
+  { g: {fr: 'Sécurité & Accès', en: 'Security & Access'}, fr:'⚠ Au moins une alerte',        en:'⚠ At least one alert',      f:[['calc.nbAlertes','gte','1']] },
+
+  // --- Activité ---
+  { g: {fr: 'Activité', en: 'Activity'}, fr:'Jamais connectés',             en:'Never signed in',           f:[['lastLoginTime','starts','1970']] },
+  { g: {fr: 'Activité', en: 'Activity'}, fr:'Inactifs > 90 jours',          en:'Inactive > 90 days',        f:[['lastLoginTime','older','90']] },
+  { g: {fr: 'Activité', en: 'Activity'}, fr:'Inactifs > 180 jours',         en:'Inactive > 180 days',       f:[['calc.joursDepuisConnexion','gt','180']] },
+
+  // --- Qualité des données (RH) ---
+  { g: {fr: 'Qualité des données', en: 'Data Quality'}, fr:'Sans manager',                 en:'No manager',                f:[['relations[manager].value','empty','']] },
+  { g: {fr: 'Qualité des données', en: 'Data Quality'}, fr:'Sans département',             en:'No department',             f:[['organizations.department','empty','']] },
+  { g: {fr: 'Qualité des données', en: 'Data Quality'}, fr:'Sans fonction/titre',          en:'No title',                  f:[['organizations.title','empty','']] },
+  { g: {fr: 'Qualité des données', en: 'Data Quality'}, fr:'Sans photo de profil',         en:'No profile photo',          f:[['thumbnailPhotoUrl','empty','']] },
+  { g: {fr: 'Qualité des données', en: 'Data Quality'}, fr:'Sans mobile',                  en:'No mobile number',          f:[['phones[mobile].value','empty','']] },
+  { g: {fr: 'Qualité des données', en: 'Data Quality'}, fr:'Sans aucun téléphone',         en:'No phone at all',           f:[['phones.value','empty','']] },
+  { g: {fr: 'Qualité des données', en: 'Data Quality'}, fr:'Sans centre de coût',          en:'No cost centre',            f:[['organizations.costCenter','empty',''],['organizations.costCenter','in','@remplissage']], logic:'OR' },
+  { g: {fr: 'Qualité des données', en: 'Data Quality'}, fr:'Fiche RH incomplète',          en:'Incomplete custom record',  f:[['calc.completudeSchemas','lt','100']] },
+  { g: {fr: 'Qualité des données', en: 'Data Quality'}, fr:'Sans poste interne',           en:'No internal extension',     f:[['calc.aPosteInterne','eq','false']] },
+
+  // --- Configuration & Licences ---
+  { g: {fr: 'Configuration', en: 'Configuration'}, fr:'Comptes archivés',             en:'Archived accounts',         f:[['archived','eq','true']] },
+  { g: {fr: 'Configuration', en: 'Configuration'}, fr:'Boîte non configurée',         en:'Mailbox not set up',        f:[['isMailboxSetup','eq','false']] },
+  { g: {fr: 'Configuration', en: 'Configuration'}, fr:'Hors annuaire global',         en:'Hidden from global list',   f:[['includeInGlobalAddressList','eq','false']] },
+  { g: {fr: 'Configuration', en: 'Configuration'}, fr:'Créés cette année',            en:'Created this year',         f:[['calc.anneeCreation','eq', String(new Date().getFullYear())]] },
+  { g: {fr: 'Configuration', en: 'Configuration'}, fr:'Ancienneté > 10 ans',          en:'Tenure > 10 years',         f:[['calc.ancienneteAnnees','gte','10']] }
+];
+
+var COLSETS = {
+  identite:['primaryEmail','name.fullName','name.givenName','name.familyName','gender.type','orgUnitPath'],
+  rh:[],   // rempli à l'exécution avec les champs personnalisés du domaine
+  secu:['primaryEmail','suspended','isAdmin','isDelegatedAdmin','isEnrolledIn2Sv','isEnforcedIn2Sv','lastLoginTime','recoveryEmail','changePasswordAtNextLogin'],
+  alertes:['primaryEmail','name.fullName','calc.nbAlertes','calc.alertes','calc.joursDepuisConnexion','isEnrolledIn2Sv','calc.estAdmin','calc.completudeSchemas'],
+  loc:['primaryEmail','locations[desk].buildingId','locations[desk].floorName','locations[desk].floorSection','locations[desk].deskCode','addresses[work].formatted','phones[home].value','phones[mobile].value']
+};
+
+var DATE_RE = /^\d{4}-\d{2}-\d{2}(T|$)/;   // ISO complet OU date seule (schémas perso)
+
+/* Champs existants dans la projection "full" mais absents du jeu chargé :
+   affichés à 0 % pour rester interrogeables (« est vide » sur toute la base). */
+var KNOWN_PATHS = [
+  'aliases','nonEditableAliases','suspensionReason','deletionTime','hashFunction',
+  'archived','isEnforcedIn2Sv','thumbnailPhotoUrl',
+  'notes.value','notes.contentType',
+  'ims.address','ims.protocol','ims.type','ims.primary',
+  'externalIds.value','externalIds.type','externalIds.customType',
+  'keywords.value','keywords.type','keywords.customType',
+  'posixAccounts.username','posixAccounts.uid','posixAccounts.gid','posixAccounts.systemId',
+  'sshPublicKeys.key','sshPublicKeys.expirationTimeUsec',
+  'addresses.streetAddress','addresses.locality','addresses.region','addresses.postalCode',
+  'addresses.countryCode','addresses.poBox','addresses.extendedAddress','addresses.primary',
+  'organizations.location','organizations.domain','organizations.symbol',
+  'organizations.fullTimeEquivalent','organizations.type',
+  'emails.type','emails.customType','relations.customType','phones.customType',
+  'languages.customLanguage','locations.customType'
+];
+
+/* ==========================================================================
+ *  APLATISSEMENT — toute la profondeur du JSON Directory
+ * ======================================================================== */
+function flatten(user){
+  var out = {};
+
+  // écriture directe : pas de dictionnaire intermédiaire recopié ensuite
+  function add(path, val){
+    if (val === null || val === undefined || val === '') return;
+    var a = out[path];
+    if (a) a.push(val); else out[path] = [val];
+  }
+
+  function walk(node, prefix, sink){
+    var ks = Object.keys(node);
+    for (var i = 0; i < ks.length; i++){
+      var k = ks[i], v = node[k];
+      if (v === null || v === undefined) continue;
+      var p = prefix ? prefix + '.' + k : k;
+      if (Array.isArray(v)) arr(v, p, sink);
+      else if (typeof v === 'object') walk(v, p, sink);
+      else sink(p, v);
+    }
+  }
+
+  function arr(list, p, sink){
+    for (var i = 0; i < list.length; i++){
+      var el = list[i];
+      if (el === null || el === undefined) continue;
+      if (typeof el !== 'object'){ sink(p, el); continue; }
+
+      // enveloppe pure {value: x} — champs de schéma personnalisé multivalués
+      var ks = Object.keys(el);
+      if (ks.length === 1 && ks[0] === 'value'){
+        sink(p, el.value);
+        sink(p + '.value', el.value);
+        continue;
+      }
+
+      var sub = {};
+      walk(el, '', function(sp, v){
+        var a = sub[sp];
+        if (a) a.push(v); else sub[sp] = [v];
+      });
+
+      var q = qualifier(el), prim = (el.primary === true);
+      var qp = q ? p + '[' + q + ']' : '';
+      var sps = Object.keys(sub);
+      for (var j = 0; j < sps.length; j++){
+        var sp = sps[j], vs = sub[sp];
+        for (var m = 0; m < vs.length; m++){
+          var val = vs[m];
+          sink(p + '.' + sp, val);
+          if (qp){
+            sink(qp + '.' + sp, val);
+            if (sp === 'value' || sp === 'address' || sp === 'formatted') sink(qp, val);
+          }
+          if (prim) sink(p + '[primary].' + sp, val);
+        }
+      }
+    }
+  }
+
+  function qualifier(el){
+    if (el.type && el.type !== 'custom') return String(el.type);
+    if (el.customType) return String(el.customType);
+    if (el.type) return String(el.type);
+    if (el.languageCode) return String(el.languageCode);
+    return '';
+  }
+
+  walk(user, '', add);
+  derive(user, add);
+  return out;
+}
+
+/**
+ * Indicateurs dérivés, groupe « calc ». Ils n'existent pas dans l'API mais
+ * répondent aux questions qu'on pose réellement à un annuaire.
+ */
+function derive(u, add){
+  var now = Date.now(), alertes = [];
+  function put(k, v){ add('calc.' + k, v); }
+
+  // --- Connexion ---
+  var ll = u.lastLoginTime, t = ll ? Date.parse(ll) : NaN;
+  var jamais = !ll || String(ll).indexOf('1970') === 0 || isNaN(t);
+  put('jamaisConnecte', jamais);
+  if (jamais){ alertes.push('jamais connecté'); }
+  else {
+    var j = Math.floor((now - t) / 86400000);
+    put('joursDepuisConnexion', j);
+    put('anneeDerniereConnexion', String(ll).substring(0, 4));
+    if (j > 365) alertes.push('inactif +365j');
+    else if (j > 180) alertes.push('inactif +180j');
+    else if (j > 90) alertes.push('inactif +90j');
+  }
+
+  // --- Ancienneté ---
+  if (u.creationTime){
+    var c = Date.parse(u.creationTime);
+    if (!isNaN(c)){
+      put('ancienneteAnnees', Math.floor((now - c) / 31557600000));
+      put('anneeCreation', String(u.creationTime).substring(0, 4));
+    }
+  }
+
+  // --- Identité / adresse ---
+  var mail = String(u.primaryEmail || '');
+  if (mail.indexOf('@') !== -1){
+    put('identifiant', mail.split('@')[0]);
+    put('domaine', mail.split('@')[1]);
+  }
+  put('nbEmails', (u.emails || []).length);
+  put('nbAlias', (u.aliases || []).length);
+  put('nbAliasNonModifiables', (u.nonEditableAliases || []).length);
+
+  // --- Téléphonie ---
+  var ph = u.phones || [];
+  put('nbTelephones', ph.length);
+  put('aMobile', ph.some(function(x){ return x.type === 'mobile'; }));
+  put('aPosteInterne', ph.some(function(x){ return /^\d{3,6}$/.test(String(x.value || '')); }));
+
+  // --- Hiérarchie / OU ---
+  var mgr = (u.relations || []).filter(function(r){ return r.type === 'manager'; });
+  put('aManager', mgr.length > 0);
+  if (!mgr.length) alertes.push('sans manager');
+  var ou = u.orgUnitPath || '/';
+  put('profondeurOU', ou === '/' ? 0 : ou.split('/').length - 1);
+  put('ouRacine', ou === '/' ? '/' : '/' + ou.split('/')[1]);
+
+  // --- Sécurité ---
+  var admin = !!(u.isAdmin || u.isDelegatedAdmin);
+  put('estAdmin', admin);
+  if (!u.suspended){
+    if (!u.isEnrolledIn2Sv){
+      alertes.push('sans 2SV');
+      if (admin) alertes.push('admin sans 2SV');
+    }
+    if (!u.recoveryEmail && !u.recoveryPhone) alertes.push('sans récupération');
+    if (u.changePasswordAtNextLogin) alertes.push('mot de passe à changer');
+    if (u.isMailboxSetup === false) alertes.push('boîte non configurée');
+  }
+  if (u.recoveryEmail && mail.indexOf('@') !== -1){
+    var dr = String(u.recoveryEmail).split('@')[1] || '';
+    put('recuperationExterne', dr.toLowerCase() !== mail.split('@')[1].toLowerCase());
+  }
+
+  // --- Complétude des schémas personnalisés ---
+  var cs = u.customSchemas || {}, tot = 0, ok = 0, vides = [];
+  Object.keys(cs).forEach(function(sc){
+    Object.keys(cs[sc]).forEach(function(fn){
+      tot++;
+      var v = cs[sc][fn];
+      if (v === '' || v === null || v === undefined || (Array.isArray(v) && !v.length)) vides.push(sc + '.' + fn);
+      else ok++;
+    });
+  });
+  if (tot){
+    put('completudeSchemas', Math.round(ok * 100 / tot));
+    vides.forEach(function(v){ add('calc.champsSchemaVides', v); });
+  }
+
+  // --- Synthèse ---
+  put('nbAlertes', alertes.length);
+  put('conforme', alertes.length === 0);
+  alertes.forEach(function(a){ add('calc.alertes', a); });
+}
+
+/* ==========================================================================
+ *  INDEXATION + CATALOGUE
+ * ======================================================================== */
+var CARD_CAP = 3000;   // au-delà, on cesse de mémoriser les valeurs distinctes
+
+/** Aplatit et indexe une tranche, sans toucher au catalogue. */
+function indexRows(users){
+  for (var i = 0; i < users.length; i++){
+    var u = users[i];
+    S.rows.push({ u:u, f:flatten(u), s:JSON.stringify(u).toLowerCase() });
+  }
+}
+
+/** Construit le catalogue à partir des lignes déjà indexées. */
+function buildIndex(){
+  var map = {};
+  S.rows.forEach(function(r){
+    Object.keys(r.f).forEach(function(p){
+      var e = map[p] || (map[p] = { path:p, count:0, vals:{}, distinct:0, types:{} });
+      e.count++;
+      r.f[p].forEach(function(v){
+        var k = String(v);
+        if (e.vals[k] === undefined){
+          if (e.distinct >= CARD_CAP){ e.capped = true; e.distinct++; e.types[typeOf(v)] = 1; return; }
+          e.vals[k] = 0; e.distinct++;
+        }
+        e.vals[k]++;
+        e.types[typeOf(v)] = 1;
+      });
+    });
+  });
+
+  // Champs de schémas personnalisés déclarés mais jamais renseignés
+  (S.schemas || []).forEach(function(sc){
+    (sc.fields || []).forEach(function(fl){
+      var p = 'customSchemas.' + sc.schemaName + '.' + fl.fieldName;
+      if (!map[p]) map[p] = { path:p, count:0, vals:{}, distinct:0, types:{}, declared:true };
+    });
+  });
+  // Champs standard de la projection "full" absents du jeu chargé
+  KNOWN_PATHS.forEach(function(p){
+    if (!map[p]) map[p] = { path:p, count:0, vals:{}, distinct:0, types:{}, declared:true };
+  });
+
+  var n = S.rows.length || 1;
+  S.catalog = Object.keys(map).map(function(p){
+    var e = map[p];
+    var tops = Object.keys(e.vals).map(function(k){ return [k, e.vals[k]]; })
+                     .sort(function(a,b){ return b[1]-a[1]; });
+    return {
+      path: p, count: e.count, fill: e.count / n, distinct: e.distinct,
+      type: pickType(e.types), top: tops.slice(0, 400), declared: !!e.declared, capped: !!e.capped,
+      group: p.split(/[.\[]/)[0]
+    };
+  }).sort(function(a,b){ return a.path.localeCompare(b.path, LOC()); });
+
+  S.byPath = {};
+  S.catalog.forEach(function(c){ S.byPath[c.path] = c; });
+}
+
+function typeOf(v){
+  if (typeof v === 'boolean') return 'bool';
+  if (typeof v === 'number') return 'num';
+  if (typeof v === 'string' && DATE_RE.test(v)) return 'date';
+  return 'str';
+}
+function pickType(t){
+  if (t.date) return 'date';
+  if (t.bool && !t.str && !t.num) return 'bool';
+  if (t.num && !t.str) return 'num';
+  return 'str';
+}
+/**
+ * Résolution d'un chemin : exact, sinon par suffixe exact (« Matricule » ->
+ * « customSchemas.RH.Matricule »). La correspondance par sous-chaîne, elle,
+ * pouvait lier un libellé à un champ sans rapport sur un autre domaine.
+ */
+function resolvePath(p){
+  if (S.byPath[p]) return p;
+  var hit = S.catalog.filter(function(c){
+    return c.path === p || c.path.slice(-(p.length + 1)) === '.' + p;
+  });
+  return hit.length ? hit[0].path : p;
+}
+function vals(row, path){ return row.f[path] || []; }
+
+/* ==========================================================================
+ *  MOTEUR DE FILTRES
+ * ======================================================================== */
+function testOne(row, flt){
+  var vs = vals(row, flt.path);
+  var op = flt.op, needle = String(flt.val == null ? '' : flt.val);
+  var nl = needle.toLowerCase(), nn = squash(nl);
+
+  if (op === 'empty')  return vs.length === 0;
+  if (op === 'nempty') return vs.length > 0;
+  if (!vs.length) return (op === 'ncontains' || op === 'neq');
+
+  // chaque valeur est testée telle quelle ET dépouillée de ses séparateurs,
+  // pour que « 625 » retrouve « +33 6 25 42 04 62 »
+  var any = function(fn){
+    return vs.some(function(v){
+      return forms(String(v).toLowerCase()).some(function(s){ return fn(s, v); });
+    });
+  };
+  var all = function(fn){
+    return vs.every(function(v){
+      return forms(String(v).toLowerCase()).every(function(s){ return fn(s, v); });
+    });
+  };
+
+  switch(op){
+    case 'contains':  return any(function(s){ return s.indexOf(nl) !== -1 || (nn && s.indexOf(nn) !== -1); });
+    case 'ncontains': return all(function(s){ return s.indexOf(nl) === -1 && (!nn || s.indexOf(nn) === -1); });
+    case 'eq':        return any(function(s){ return s === nl || (nn && s === nn); });
+    case 'neq':       return all(function(s){ return s !== nl && (!nn || s !== nn); });
+    case 'starts':    return any(function(s){ return s.indexOf(nl) === 0 || (nn && s.indexOf(nn) === 0); });
+    case 'ends':      return any(function(s){ return nl !== '' && (s.lastIndexOf(nl) === s.length - nl.length || (nn && s.lastIndexOf(nn) === s.length - nn.length)); });
+    case 'in':
+      var set = nl.split(/[,;]/).map(function(x){ return x.trim(); }).filter(Boolean);
+      return any(function(s){ return set.indexOf(s) !== -1; });
+    case 'regex':
+      var re; try { re = new RegExp(needle, 'i'); } catch(e){ return false; }
+      return any(function(s, v){ return re.test(String(v)); });
+    case 'gt': case 'gte': case 'lt': case 'lte':
+      return any(function(s, v){ return cmp(v, needle, op); });
+    case 'older': case 'newer':
+      var d = parseFloat(needle); if (isNaN(d)) return false;
+      var lim = Date.now() - d * 86400000;
+      return any(function(s, v){
+        var t = Date.parse(v); if (isNaN(t)) return false;
+        return op === 'older' ? t < lim : t >= lim;
+      });
+  }
+  return true;
+}
+function squash(s){
+  var n = String(s).replace(/[\s.\-()\/]/g, '');
+  return n === String(s) ? '' : n;
+}
+function forms(s){
+  var n = squash(s);
+  return n ? [s, n] : [s];
+}
+function cmp(v, needle, op){
+  var a, b;
+  if (DATE_RE.test(String(v)) || /^\d{4}-\d{2}-\d{2}/.test(needle)){
+    a = Date.parse(v); b = Date.parse(needle);
+  } else { a = parseFloat(v); b = parseFloat(needle); }
+  if (isNaN(a) || isNaN(b)){ a = String(v).toLowerCase(); b = String(needle).toLowerCase(); }
+  if (op === 'gt') return a > b;
+  if (op === 'gte') return a >= b;
+  if (op === 'lt') return a < b;
+  return a <= b;
+}
+
+function applyQuery(){
+  var q = S.search.trim().toLowerCase();
+  // Un critère dont la valeur n'est pas encore saisie est en attente, pas
+  // faux : l'appliquer renverrait zéro résultat et laisserait croire à une
+  // absence de données.
+  var active = S.filters.filter(function(f){
+    return f.path && (f.val !== '' || f.op === 'empty' || f.op === 'nempty');
+  });
+
+  S.result = S.rows.filter(function(row){
+    if (q && row.s.indexOf(q) === -1) return false;
+    if (!active.length) return true;
+    if (S.logic === 'AND') return active.every(function(f){ return testOne(row, f); });
+    return active.some(function(f){ return testOne(row, f); });
+  });
+
+  var p = S.sort.path, d = S.sort.dir;
+  S.result.sort(function(x, y){
+    var a = (x.f[p] || [])[0], b = (y.f[p] || [])[0];
+    if (a === undefined && b === undefined) return 0;
+    if (a === undefined) return 1;
+    if (b === undefined) return -1;
+    if (typeof a === 'number' && typeof b === 'number') return (a - b) * d;
+    var aDate = DATE_RE.test(String(a)), bDate = DATE_RE.test(String(b));
+    if (aDate && bDate) return (Date.parse(a) - Date.parse(b)) * d;
+    if (aDate) return -1 * d;
+    if (bDate) return 1 * d;
+    return String(a).localeCompare(String(b), LOC(), { numeric:true }) * d;
+  });
+
+  S.page = 1;
+  render();
+}
+
+/* ==========================================================================
+ *  RENDU
+ * ======================================================================== */
+function esc(s){
+  return String(s).replace(/[&<>"]/g, function(c){
+    return ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' })[c];
+  });
+}
+function prettyPath(p){
+  return esc(p).replace(/\[([^\]]+)\]/g, '[<em>$1</em>]');
+}
+
+function renderFieldList(){
+  var q = (document.getElementById('fieldSearch').value || '').toLowerCase();
+  var list = S.catalog.filter(function(c){ return !q || c.path.toLowerCase().indexOf(q) !== -1; });
+  document.getElementById('fieldCount').textContent =
+    list.length + ' / ' + S.catalog.length + ' ' + T('chemins') + ' · ' + nb(S.rows.length) + ' ' + T('comptes');
+
+  var html = '', grp = '';
+  list.forEach(function(c){
+    if (c.group !== grp){ grp = c.group; html += '<div class="grp">' + esc(grp) + '</div>'; }
+    var on = S.cols.indexOf(c.path) !== -1;
+    var pct = Math.round(c.fill * 100);
+    html += '<div class="fld ' + (on ? 'on' : '') + '" data-path="' + esc(c.path) + '">'
+          +   '<div class="p">' + prettyPath(c.path)
+          +     '<div class="bar"><i style="width:' + pct + '%"></i></div>'
+          +   '</div>'
+          +   '<div class="m">' + pct + '%<br>' + c.distinct + '</div>'
+          + '</div>';
+  });
+  document.getElementById('fieldList').innerHTML = html || '<div style="padding:20px;color:rgba(255,255,255,.6)">' + esc(T('aucunChemin')) + '</div>';
+
+  document.getElementById('dlFields').innerHTML =
+    S.catalog.map(function(c){ return '<option value="' + esc(c.path) + '">'; }).join('');
+}
+
+function renderFilters(){
+  var opts = OPS.map(function(o){ return '<option value="' + o[0] + '">' + esc(opLabel(o[0])) + '</option>'; }).join('');
+  var html = S.filters.map(function(f, i){
+    return '<div class="frow" data-i="' + i + '">'
+      + '<span class="lg">' + (i === 0 ? T('oux') : (S.logic === 'AND' ? T('et') : T('ou'))) + '</span>'
+      + '<input type="text" class="fpath" list="dlFields" placeholder="' + T('cheminDuChamp') + '" value="' + esc(f.path) + '">'
+      + '<select class="fop">' + opts + '</select>'
+      + '<input type="text" class="fval" placeholder="' + T('valeur') + '" value="' + esc(f.val) + '" list="dlValues">'
+      + '<span class="hint" data-hint></span>'
+      + '<button class="x" data-del>✕</button>'
+      + '</div>';
+  }).join('');
+  var box = document.getElementById('filters');
+  box.innerHTML = html;
+  S.filters.forEach(function(f, i){
+    var sel = box.querySelector('[data-i="' + i + '"] .fop');
+    if (sel) sel.value = f.op;
+    updateHint(i);
+  });
+}
+function updateHint(i){
+  var el = document.querySelector('#filters [data-i="' + i + '"] [data-hint]');
+  if (!el) return;
+  var c = S.byPath[S.filters[i].path];
+  el.textContent = c ? (c.type + ' · ' + c.distinct + ' valeurs · ' + Math.round(c.fill * 100) + '%') : '';
+}
+
+function cell(v){
+  if (v === true)  return '<span class="tag t">' + T('vrai') + '</span>';
+  if (v === false) return '<span class="tag f">' + T('faux') + '</span>';
+  if (typeof v === 'number') return '<span class="tag n">' + v + '</span>';
+  var s = String(v);
+  if (DATE_RE.test(s)){
+    if (s.indexOf('1970-01-01') === 0) return '<span class="tag f">' + T('jamais') + '</span>';
+    return esc(s.substring(0, 10) + ' ' + s.substring(11, 16));
+  }
+  return esc(s);
+}
+
+function renderTable(){
+  var v = document.getElementById('viewResults');
+  if (!S.result.length){
+    v.innerHTML = '<div class="empty"><h3>' + esc(T('aucunResultatT')) + '</h3>'
+      + '<p>' + esc(T('aucunResultatD')) + '</p></div>';
+    return;
+  }
+  var size = S.pageSize, start = (S.page - 1) * size, page = S.result.slice(start, start + size);
+
+  var head = '<tr>' + S.cols.map(function(p){
+    var ar = S.sort.path === p ? '<span class="ar">' + (S.sort.dir === 1 ? '▲' : '▼') + '</span>' : '';
+    return '<th data-sort="' + esc(p) + '" title="' + esc(p) + '">' + esc(shortLabel(p)) + ar + '</th>';
+  }).join('') + '</tr>';
+
+  var body = page.map(function(r, idx){
+    return '<tr data-row="' + (start + idx) + '">' + S.cols.map(function(p, ci){
+      var vs = r.f[p] || [];
+      var txt = vs.length ? vs.map(cell).join(' <span class="sep">·</span> ') : '<span class="sep">—</span>';
+      return '<td class="' + (ci === 0 ? 'mail' : '') + '" title="' + esc(vs.join(' | ')) + '">' + txt + '</td>';
+    }).join('') + '</tr>';
+  }).join('');
+
+  var pages = Math.ceil(S.result.length / size);
+  var pager = pages > 1
+    ? '<div class="pager"><button class="btn" data-pg="-1">' + esc(T('precedent')) + '</button>'
+      + '<span>' + T('page') + ' ' + S.page + ' / ' + pages + '</span>'
+      + '<button class="btn" data-pg="1">' + esc(T('suivant')) + '</button></div>'
+    : '';
+
+  v.innerHTML = '<table class="md3-table"><thead>' + head + '</thead><tbody>' + body + '</tbody></table>' + pager;
+}
+
+function shortLabel(p){
+  return p.replace('customSchemas.', '').replace(/\.value$/, '').replace(/\.formatted$/, '');
+}
+
+function renderPivot(){
+  var v = document.getElementById('viewPivot');
+  var path = v.dataset.path || resolvePath('organizations.department');
+  var counts = {}, total = 0, vide = 0;
+  S.result.forEach(function(r){
+    var vs = r.f[path] || [];
+    if (!vs.length){ vide++; total++; return; }
+    vs.forEach(function(x){ var k = String(x); counts[k] = (counts[k] || 0) + 1; total++; });
+  });
+  var rows = Object.keys(counts).map(function(k){ return [k, counts[k]]; })
+                   .sort(function(a, b){ return b[1] - a[1]; });
+  if (vide) rows.push([T('nonRenseigne'), vide]);
+  var max = rows.length ? Math.max.apply(null, rows.map(function(r){ return r[1]; })) : 1;
+
+  v.innerHTML = '<div class="pivot-h">'
+    + '<strong>' + T('repartitionPar') + '</strong>'
+    + '<input type="text" id="pvField" list="dlFields" value="' + esc(path) + '">'
+    + '<span class="hint">' + T('calculeeSur').replace('{n}', nb(S.result.length)).replace('{d}', nb(rows.length)) + '</span>'
+    + '<button class="btn" id="pvCsv" style="margin-left:auto">↓ CSV</button></div>'
+    + '<table class="pv"><thead><tr><th style="width:44%">' + T('colValeur') + '</th><th style="width:90px">' + T('colComptes') + '</th><th style="width:70px">%</th><th>' + T('colPoids') + '</th></tr></thead><tbody>'
+    + rows.map(function(r){
+        return '<tr><td class="v" data-pv="' + esc(r[0]) + '">' + esc(r[0]) + '</td>'
+             + '<td>' + r[1] + '</td>'
+             + '<td>' + (total ? (r[1] * 100 / total).toFixed(1) : '0') + ' %</td>'
+             + '<td><div class="pvbar"><i style="width:' + (r[1] * 100 / max) + '%"></i></div></td></tr>';
+      }).join('')
+    + '</tbody></table>';
+
+  v.dataset.path = path;
+  document.getElementById('pvField').addEventListener('change', function(){
+    v.dataset.path = this.value; renderPivot();
+  });
+  document.getElementById('pvCsv').addEventListener('click', function(){
+    var csv = '\uFEFFValeur;Comptes;Part\n' + rows.map(function(r){
+      return safeCsv(r[0]) + ';' + r[1] + ';' + (r[1] * 100 / total).toFixed(2);
+    }).join('\n');
+    download('repartition_' + path.replace(/[^\w]+/g, '_') + '.csv', csv);
+    logEvent('export', rows.length);
+  });
+  v.querySelectorAll('[data-pv]').forEach(function(td){
+    td.addEventListener('click', function(){
+      var val = this.dataset.pv;
+      S.filters.push({ path: v.dataset.path, op: val === T('nonRenseigne') ? 'empty' : 'eq', val: val === T('nonRenseigne') ? '' : val });
+      renderFilters(); applyQuery(); switchTab('results');
+    });
+  });
+}
+
+function renderCatalog(){
+  var v = document.getElementById('viewCatalog');
+  v.innerHTML = '<table class="pv"><thead><tr>'
+    + '<th style="width:40%">' + T('colChemin') + '</th><th style="width:70px">' + T('colType') + '</th>'
+    + '<th style="width:90px">' + T('colRenseigne') + '</th><th style="width:90px">' + T('colDistinctes') + '</th>'
+    + '<th>' + T('colFrequentes') + '</th><th style="width:70px"></th></tr></thead><tbody>'
+    + S.catalog.map(function(c){
+        var top = c.top.slice(0, 4).map(function(t){
+          return esc(t[0].substring(0, 28)) + ' <span class="sep">(' + t[1] + ')</span>';
+        }).join(' · ') || '<span class="sep">—</span>';
+        return '<tr><td style="font-size:11.5px">' + prettyPath(c.path) + (c.declared ? ' <span class="tag n">' + T('nonPeuple') + '</span>' : '') + '</td>'
+          + '<td>' + c.type + '</td>'
+          + '<td>' + Math.round(c.fill * 100) + ' %<br><span class="sep">' + c.count + '</span></td>'
+          + '<td>' + c.distinct + '</td>'
+          + '<td style="font-size:11px">' + top + '</td>'
+          + '<td><button class="btn" data-addcol="' + esc(c.path) + '" style="padding:3px 7px;font-size:11px">' + T('colonne') + '</button></td></tr>';
+      }).join('')
+    + '</tbody></table>';
+  v.querySelectorAll('[data-addcol]').forEach(function(b){
+    b.addEventListener('click', function(){
+      toggleCol(this.dataset.addcol); switchTab('results');
+    });
+  });
+}
+
+function render(){
+  if (S.mode === 'simple'){ renderSimple(); return; }
+  document.getElementById('resCount').innerHTML =
+    '<b>' + nb(S.result.length) + '</b> / ' + nb(S.rows.length) + ' ' + T('comptes');
+  if (S.tab === 'results') renderTable();
+  if (S.tab === 'pivot') renderPivot();
+  if (S.tab === 'catalog') renderCatalog();
+  if (S.tab === 'anomalies') renderAnomalies();
+  renderFieldList();
+}
+
+/* ==========================================================================
+ *  FICHE COMPTE
+ * ======================================================================== */
+function openUser(i){
+  if (S.result[i]) openRow(S.result[i]);
+}
+function openRow(r){
+  S.current = r;
+  var u = r.u;
+  var initials = ((u.name && u.name.givenName || '?')[0] + (u.name && u.name.familyName || '?')[0]).toUpperCase();
+  document.getElementById('dAv').innerHTML = u.thumbnailPhotoUrl
+    ? '<img src="' + esc(u.thumbnailPhotoUrl) + '" alt="">' : initials;
+  document.getElementById('dName').textContent = (u.name && u.name.fullName) || u.primaryEmail;
+  document.getElementById('dMail').textContent = u.primaryEmail + ' · ' + (u.orgUnitPath || '');
+  renderDrawer();
+  document.getElementById('drawer').classList.add('on');
+  document.getElementById('scrim').classList.add('on');
+}
+function renderDrawer(){
+  var r = S.current; if (!r) return;
+  var b = document.getElementById('dBody');
+  if (S.dtab === 'json'){
+    b.innerHTML = '<pre class="json">' + colorJson(JSON.stringify(r.u, null, 2)) + '</pre>';
+  } else {
+    var ks = Object.keys(r.f).sort(function(a, b2){ return a.localeCompare(b2, LOC()); });
+    b.innerHTML = '<table class="kv">' + ks.map(function(k){
+      return '<tr><td class="k">' + prettyPath(k) + '</td><td>' + r.f[k].map(cell).join(' · ') + '</td></tr>';
+    }).join('') + '</table>';
+  }
+}
+function colorJson(txt){
+  return esc(txt)
+    .replace(/&quot;([^&]*?)&quot;(\s*:)/g, '<span class="k">"$1"</span>$2')
+    .replace(/: &quot;(.*?)&quot;/g, ': <span class="s">"$1"</span>')
+    .replace(/: (true|false|null)/g, ': <span class="b">$1</span>')
+    .replace(/: (-?\d+\.?\d*)/g, ': <span class="n">$1</span>');
+}
+function safeCsv(v){
+  var s = String(v || '');
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+  return /[";\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+function closeDrawer(){
+  document.getElementById('drawer').classList.remove('on');
+  document.getElementById('scrim').classList.remove('on');
+}
+
+/* ==========================================================================
+ *  EXPORT
+ * ======================================================================== */
+function exportCsv(){
+  if (!S.result.length){ toast(T('aucunExport')); return; }
+  var sep = ';';
+  var head = S.cols.join(sep);
+  var lines = S.result.map(function(r){
+    return S.cols.map(function(p){
+      return safeCsv((r.f[p] || []).join(' | '));
+    }).join(sep);
+  });
+  download('annuaire_' + new Date().toISOString().substring(0, 10) + '.csv',
+           '\uFEFF' + head + '\n' + lines.join('\n'));
+  logEvent('export', S.result.length);
+  toast(T('lignesExportees').replace('{n}', nb(S.result.length)));
+}
+
+/**
+ * Export vers Google Sheets : le serveur cr\u00E9e le classeur (propri\u00E9t\u00E9 du compte
+ * de d\u00E9ploiement), le range et le partage en lecture avec le demandeur.
+ */
+function exportSheet(){
+  if (!S.result.length){ toast(T('aucunExport')); return; }
+  var cols = S.cols.slice();
+  var rows = S.result.map(function(r){
+    return cols.map(function(p){ return (r.f[p] || []).join(' | '); });
+  });
+  toast(T('exportSheetEnCours'));
+  google.script.run.withSuccessHandler(function(res){
+    if (!res || !res.ok){ banner('err', srvMsg(res)); return; }
+    logEvent('sheet', res.count);
+    var d = document.createElement('div');
+    d.className = 'banner ok';
+    d.innerHTML = esc(T('exportSheetOk')) + ' <a href="' + esc(res.url) + '" target="_blank" rel="noopener">' + esc(res.name) + '</a>';
+    document.getElementById('banners').appendChild(d);
+  }).withFailureHandler(function(e){
+    banner('err', T('echecChargement') + (e && e.message ? e.message : e));
+  }).apiExportToSheet({ cols: cols, rows: rows });
+}
+function download(name, txt){
+  var a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(txt);
+  a.download = name; document.body.appendChild(a); a.click(); a.remove();
+}
+function toast(m){
+  var t = document.getElementById('toast');
+  t.textContent = m; t.classList.add('on');
+  setTimeout(function(){ t.classList.remove('on'); }, 2200);
+}
+
+/* ==========================================================================
+ *  COLONNES / ONGLETS
+ * ======================================================================== */
+function toggleCol(p){
+  var i = S.cols.indexOf(p);
+  if (i === -1) S.cols.push(p); else S.cols.splice(i, 1);
+  if (!S.cols.length) S.cols = ['primaryEmail'];
+  render();
+}
+function switchTab(t){
+  S.tab = t;
+  document.querySelectorAll('.tabs .tab').forEach(function(b){ b.classList.toggle('on', b.dataset.tab === t); });
+  document.getElementById('viewResults').style.display = t === 'results' ? '' : 'none';
+  document.getElementById('viewPivot').style.display = t === 'pivot' ? '' : 'none';
+  document.getElementById('viewCatalog').style.display = t === 'catalog' ? '' : 'none';
+  document.getElementById('viewAnomalies').style.display = t === 'anomalies' ? '' : 'none';
+  render();
+}
+
+
+/* ==========================================================================
+ *  MODE SIMPLE
+ *  Même moteur, autre surface. Le mode simple écrit dans S.filters comme le
+ *  mode expert : la sémantique ne peut pas diverger. Le dictionnaire ci-dessous
+ *  est la seule couche de traduction — libellé métier -> chemin technique.
+ * ======================================================================== */
+
+/* Socle : champs standard de l'API Directory, présents sur tout domaine.
+   Les champs personnalisés, eux, sont découverts à l'exécution — voir
+   buildLabels(). Aucun nom de schéma n'est écrit en dur ici. */
+
+var LABELS = [
+  { g:'grp.identite',     fr:'Nom complet',             en:'Full name',            p:'name.fullName' },
+  { g:'grp.identite',     fr:'Prénom',                  en:'First name',           p:'name.givenName' },
+  { g:'grp.identite',     fr:'Nom de famille',          en:'Last name',            p:'name.familyName' },
+  { g:'grp.identite',     fr:'Adresse e-mail',          en:'E-mail address',       p:'primaryEmail' },
+  { g:'grp.identite',     fr:'Alias d\'adresse',        en:'E-mail aliases',       p:'aliases' },
+
+  { g:'grp.poste',        fr:'Service ou département',  en:'Department',           p:'organizations.department' },
+  { g:'grp.poste',        fr:'Fonction',                en:'Job title',            p:'organizations.title' },
+  { g:'grp.poste',        fr:'Centre de coût',          en:'Cost centre',          p:'organizations.costCenter' },
+  { g:'grp.poste',        fr:'Manager',                 en:'Manager',              p:'relations[manager].value' },
+  { g:'grp.poste',        fr:'A un manager déclaré',    en:'Has a manager',        p:'calc.aManager' },
+
+  { g:'grp.contact',      fr:'Téléphone (tous types)',  en:'Phone (any type)',     p:'phones.value' },
+  { g:'grp.contact',      fr:'Téléphone mobile',        en:'Mobile phone',         p:'phones[mobile].value' },
+  { g:'grp.contact',      fr:'Poste interne',           en:'Internal extension',   p:'phones[home].value' },
+  { g:'grp.contact',      fr:'Adresse postale',         en:'Postal address',       p:'addresses[work].formatted' },
+
+  { g:'grp.localisation', fr:'Bâtiment',                en:'Building',             p:'locations[desk].buildingId' },
+  { g:'grp.localisation', fr:'Étage',                   en:'Floor',                p:'locations[desk].floorName' },
+  { g:'grp.localisation', fr:'Aile',                    en:'Floor section',        p:'locations[desk].floorSection' },
+  { g:'grp.localisation', fr:'Code bureau',             en:'Desk code',            p:'locations[desk].deskCode' },
+
+  { g:'grp.compte',       fr:'Unité organisationnelle', en:'Org unit',             p:'orgUnitPath' },
+  { g:'grp.compte',       fr:'Compte suspendu',         en:'Suspended',            p:'suspended' },
+  { g:'grp.compte',       fr:'Administrateur',          en:'Administrator',        p:'calc.estAdmin' },
+  { g:'grp.compte',       fr:'Validation en 2 étapes',  en:'2-step verification',  p:'isEnrolledIn2Sv' },
+  { g:'grp.compte',       fr:'Dernière connexion',      en:'Last sign-in',         p:'lastLoginTime' },
+  { g:'grp.compte',       fr:'Jamais connecté',         en:'Never signed in',      p:'calc.jamaisConnecte' },
+  { g:'grp.compte',       fr:'Ancienneté (années)',     en:'Tenure (years)',       p:'calc.ancienneteAnnees' },
+  { g:'grp.compte',       fr:'Date de création',        en:'Creation date',        p:'creationTime' },
+  { g:'grp.compte',       fr:'E-mail de secours',       en:'Recovery e-mail',      p:'recoveryEmail' },
+  { g:'grp.compte',       fr:'Alertes de conformité',   en:'Compliance alerts',    p:'calc.alertes' },
+  { g:'grp.compte',       fr:'Fiche perso. complète (%)', en:'Custom record filled (%)', p:'calc.completudeSchemas' }
+];
+
+var COLS_DEFAUT = ['name.fullName','primaryEmail','organizations.department','organizations.title'];
+
+/* Questions courantes : chacune pose les critères ET les colonnes utiles.
+   Choisir les bonnes colonnes est justement ce qu'un novice ne sait pas faire. */
+var QUESTIONS = [
+  { fr:'Qui travaille dans un service ?', en:'Who works in a given department?', s:'aPreciser',
+    f:[['organizations.department','eq','']], ask:true,
+    c:['name.fullName','primaryEmail','organizations.title','phones[mobile].value'] },
+  { fr:'Qui n\'a pas la validation en 2 étapes ?', en:'Who is missing 2-step verification?', s:'securite',
+    f:[['isEnrolledIn2Sv','eq','false']],
+    c:['name.fullName','primaryEmail','organizations.department','calc.estAdmin'] },
+  { fr:'Quels comptes sont inactifs depuis plus de 6 mois ?', en:'Which accounts have been inactive for over 6 months?', s:'menage',
+    f:[['calc.joursDepuisConnexion','gt','180']],
+    c:['name.fullName','primaryEmail','organizations.department','lastLoginTime'] },
+  { fr:'Qui ne s\'est jamais connecté ?', en:'Who has never signed in?', s:'menage',
+    f:[['calc.jamaisConnecte','eq','true']],
+    c:['name.fullName','primaryEmail','organizations.department','creationTime'] },
+  { fr:'Qui sont les administrateurs ?', en:'Who are the administrators?', s:'securite',
+    f:[['calc.estAdmin','eq','true']],
+    c:['name.fullName','primaryEmail','organizations.department','isEnrolledIn2Sv'] },
+  { fr:'Quels comptes sont suspendus ?', en:'Which accounts are suspended?', s:'menage',
+    f:[['suspended','eq','true']],
+    c:['name.fullName','primaryEmail','organizations.department','lastLoginTime'] },
+  { fr:'Qui n\'a pas de manager déclaré ?', en:'Who has no manager on record?', s:'annuaire',
+    f:[['calc.aManager','eq','false']],
+    c:['name.fullName','primaryEmail','organizations.department','organizations.title'] },
+  { fr:'Qui est dans un bâtiment ?', en:'Who sits in a given building?', s:'aPreciser',
+    f:[['locations[desk].buildingId','eq','']], ask:true,
+    c:['name.fullName','primaryEmail','locations[desk].floorName','locations[desk].deskCode'] },
+  { fr:'Quelles fiches personnalisées sont incomplètes ?', en:'Which custom records are incomplete?', s:'qualiteDonnees',
+    f:[['calc.completudeSchemas','lt','100']],
+    c:['name.fullName','organizations.department','calc.completudeSchemas','calc.champsSchemaVides'] },
+  { fr:'Qui n\'a pas de téléphone mobile ?', en:'Who has no mobile number?', s:'annuaire',
+    f:[['phones[mobile].value','empty','']],
+    c:['name.fullName','primaryEmail','organizations.department','phones[home].value'] },
+  { fr:'Qui n\'a aucun numéro de téléphone ?', en:'Who has no phone number at all?', s:'annuaire',
+    f:[['phones.value','empty','']],
+    c:['name.fullName','primaryEmail','organizations.department','organizations.title'] },
+  { fr:'Qui est rattaché à un centre de coût ?', en:'Who belongs to a given cost centre?', s:'aPreciser',
+    f:[['organizations.costCenter','eq','']], ask:true,
+    c:['name.fullName','primaryEmail','organizations.department','organizations.title'] }
+];
+
+/* Opérateurs proposés selon le type du champ : on ne montre que ce qui a du
+   sens, un novice ne doit pas arbitrer entre 16 possibilités. */
+var OPS_SIMPLES = {
+  bool: [['eq', 'est', 'is']],
+  date: [['older', 'date de plus de … jours', 'date older than … days'],
+         ['newer', 'date de moins de … jours', 'date newer than … days'],
+         ['empty', 'n\'est pas renseignée', 'is not set'],
+         ['nempty', 'est renseignée', 'is set']],
+  num:  [['eq', 'est égal à', 'equals'],
+         ['gt', 'est supérieur à', 'is greater than'],
+         ['lt', 'est inférieur à', 'is less than'],
+         ['empty', 'n\'est pas renseigné', 'is not set'],
+         ['nempty', 'est renseigné', 'is set']],
+  str:  [['eq', 'est', 'is'],
+         ['contains', 'contient', 'contains'],
+         ['neq', 'n\'est pas', 'is not'],
+         ['empty', 'n\'est pas renseigné', 'is not set'],
+         ['nempty', 'est renseigné', 'is set']]
+};
+
+function opsFor(type){
+  var src = OPS_SIMPLES[type] || OPS_SIMPLES.str;
+  return src.map(function(o){ return [o[0], o[LANG === 'en' ? 2 : 1]]; });
+}
+
+/**
+ * Assemble le vocabulaire du mode simple : socle standard + champs
+ * personnalisés du domaine, découverts via Schemas.list puis, à défaut, dans
+ * les données elles-mêmes. Un libellé dont le champ n'existe pas sur ce
+ * domaine est écarté : mieux vaut une liste plus courte qu'un critère mort.
+ */
+function buildLabels(){
+  var out = [], vus = {};
+  function add(g, l, p){
+    if (!S.byPath[p] || vus[p]) return;
+    vus[p] = 1; out.push({ g:g, l:l, p:p });
+  }
+
+  // Un domaine peut ne pas utiliser les types standard (« mobile », « desk »…) :
+  // on retombe alors sur le chemin non qualifié plutôt que de perdre le champ.
+  LABELS.forEach(function(L){
+    var p = resolvePath(L.p);
+    if (!S.byPath[p] && L.p.indexOf('[') !== -1){
+      p = resolvePath(L.p.replace(/\[[^\]]+\]/, ''));
+    }
+    add(T(L.g), TL(L), p);
+  });
+
+  // Champs personnalisés. Un domaine peut en déclarer des centaines : on ne
+  // retient que ceux réellement renseignés, les mieux remplis d'abord, et on
+  // plafonne — une liste déroulante de 600 entrées n'aide personne.
+  var perso = [], vusPerso = {};
+  function candidat(groupe, libelle, chemin){
+    var c = S.byPath[chemin];
+    if (!c || vusPerso[chemin]) return;
+    vusPerso[chemin] = 1;
+    perso.push({ g:groupe, l:libelle, p:chemin, n:c.count });
+  }
+
+  // a) schémas déclarés dans la console : libellés d'affichage soignés
+  (S.schemas || []).forEach(function(sc){
+    var g = sc.displayName || sc.schemaName.replace(/_/g, ' ');
+    (sc.fields || []).forEach(function(f){
+      candidat(g, f.displayName || f.fieldName.replace(/_/g, ' '),
+               'customSchemas.' + sc.schemaName + '.' + f.fieldName);
+    });
+  });
+
+  // b) filet de sécurité : schémas vus dans les données mais absents de
+  //    Schemas.list (droit « Schémas personnalisés » non accordé)
+  S.catalog.forEach(function(c){
+    if (c.path.indexOf('customSchemas.') !== 0) return;
+    var seg = c.path.split('.');
+    if (seg.length !== 3) return;
+    candidat(seg[1].replace(/_/g, ' '), seg[2].replace(/_/g, ' '), c.path);
+  });
+
+  var parSchema = {}, retenus = 0;
+  perso.filter(function(x){ return x.n > 0; })
+       .sort(function(a, b){ return b.n - a.n || a.l.localeCompare(b.l, LOC()); })
+       .forEach(function(x){
+         parSchema[x.g] = (parSchema[x.g] || 0);
+         if (parSchema[x.g] >= BRAND.maxChampsParSchema) return;
+         if (retenus >= BRAND.maxChampsPersoTotal) return;
+         parSchema[x.g]++; retenus++;
+         x.retenu = 1;
+       });
+  // remis dans l'ordre de déclaration, groupe par groupe
+  perso.filter(function(x){ return x.retenu; })
+       .sort(function(a, b){ return a.g.localeCompare(b.g, LOC()); })
+       .forEach(function(x){ add(x.g, x.l, x.p); });
+  S.persoIgnores = perso.filter(function(x){ return x.n > 0 && !x.retenu; }).length;
+
+  S.labels = out;
+  S.labelPath = out.map(function(x){ return x.p; });
+
+  // jeu de colonnes « Champs perso. » du mode expert
+  COLSETS.rh = ['primaryEmail', 'name.fullName'].concat(
+    out.filter(function(o){ return o.p.indexOf('customSchemas.') === 0; })
+       .slice(0, 8).map(function(o){ return o.p; }));
+  if (COLSETS.rh.length === 2) COLSETS.rh = COLSETS.rh.concat(['organizations.department', 'organizations.title']);
+}
+
+function labelOf(path){
+  var l = (S.labels || []).filter(function(x){ return x.p === path; })[0];
+  return l ? l.l : path;
+}
+
+/**
+ * Une question est proposée dès que ses CRITÈRES existent sur ce domaine.
+ * Les colonnes, elles, sont facultatives : une colonne absente est retirée de
+ * l'affichage, elle ne doit pas faire disparaître une question qui fonctionne.
+ */
+function questionsDispo(){
+  return QUESTIONS.map(function(q, i){ return { q:q, i:i }; })
+    .filter(function(o){
+      return o.q.f.every(function(f){ return S.byPath[resolvePath(f[0])]; });
+    });
+}
+
+/** Colonnes retenues pour l'affichage : celles qui existent réellement. */
+function colsDispo(list){
+  var out = (list || []).map(resolvePath).filter(function(p){ return S.byPath[p]; });
+  if (!out.length) out = COLS_DEFAUT.map(resolvePath).filter(function(p){ return S.byPath[p]; });
+  if (!out.length) out = ['primaryEmail'];
+  return out;
+}
+
+function renderPresets(){
+  var valids = PRESETS.map(function(p, i){ return { p:p, i:i }; })
+    .filter(function(o){
+      return !S.catalog.length || o.p.f.every(function(f){ return S.byPath[resolvePath(f[0])]; });
+    });
+
+  var groups = {};
+  valids.forEach(function(o){
+    var gName = TL(o.p.g || {fr: 'Général', en: 'General'});
+    if (!groups[gName]) groups[gName] = [];
+    groups[gName].push(o);
+  });
+
+  var html = Object.keys(groups).map(function(gName){
+    var btns = groups[gName].map(function(o){
+      return '<button class="pre" data-pre="' + o.i + '">' + esc(TL(o.p)) + '</button>';
+    }).join('');
+    return '<div class="preset-group"><div class="preset-theme">' + esc(gName) + '</div><div class="preset-list">' + btns + '</div></div>';
+  }).join('');
+
+  document.getElementById('presets').innerHTML = html;
+}
+
+function renderQCards(){
+  var box = document.getElementById('qcards');
+  box.innerHTML = questionsDispo().map(function(o){
+    return '<button class="qc" data-q="' + o.i + '"><b>' + esc(TL(o.q)) + '</b><span>' + esc(T(o.q.s)) + '</span></button>';
+  }).join('');
+}
+
+function renderSRows(){
+  var box = document.getElementById('sRows');
+  if (!S.filters.length){
+    box.innerHTML = '<div class="hint">' + esc(T('aucunCritere').replace('{n}', nb(S.rows.length))) + '</div>';
+  } else {
+    box.innerHTML = S.filters.map(function(f, i){
+      var c = S.byPath[f.path] || { type:'str', distinct:0, top:[] };
+      var ops = opsFor(c.type);
+      // Un opérateur venu d'une question ou du mode expert peut sortir du jeu
+      // simplifié : on l'ajoute à la liste plutôt que de réécrire le critère.
+      if (!ops.some(function(o){ return o[0] === f.op; })){
+        ops = ops.concat([[f.op, opLabel(f.op)]]);
+      }
+
+      var champs = '';
+      var grp = '';
+      (S.labels || []).forEach(function(L){
+        if (L.g !== grp){ if (grp) champs += '</optgroup>'; grp = L.g; champs += '<optgroup label="' + esc(grp) + '">'; }
+        champs += '<option value="' + esc(L.p) + '"' + (L.p === f.path ? ' selected' : '') + '>' + esc(L.l) + '</option>';
+      });
+      if (grp) champs += '</optgroup>';
+
+      return '<div class="srow" data-i="' + i + '">'
+        + '<span class="lk">' + (i === 0 ? T('lesComptesDont') : (S.logic === 'AND' ? T('et_min') : T('ou_min'))) + '</span>'
+        + '<select class="f sf">' + champs + '</select>'
+        + '<select class="so">' + ops.map(function(o){
+            return '<option value="' + o[0] + '"' + (o[0] === f.op ? ' selected' : '') + '>' + esc(o[1]) + '</option>';
+          }).join('') + '</select>'
+        + valueControl(f, c, i)
+        + '<button class="x" data-sdel>✕</button>'
+        + '</div>';
+    }).join('');
+  }
+
+  document.getElementById('sLogic').innerHTML = S.filters.length > 1
+    ? '<span>' + esc(T('correspondSi')) + '</span>'
+      + '<span class="seg">'
+      + '<button class="sg' + (S.logic === 'AND' ? ' on' : '') + '" data-lg="AND">' + esc(T('tousCriteres')) + '</button>'
+      + '<button class="sg' + (S.logic === 'OR' ? ' on' : '') + '" data-lg="OR">' + esc(T('auMoinsUn')) + '</button>'
+      + '</span>'
+    : '';
+}
+
+/* Le novice ne peut pas deviner la valeur exacte : on la lui propose. */
+function valueControl(f, c, i){
+  if (f.op === 'empty' || f.op === 'nempty') return '<span class="w">' + esc(T('dansAnnuaire')) + '</span>';
+  if (c.type === 'bool'){
+    // Un <select> sans option selected affiche la première : l'utilisateur lit
+    // « Oui » pendant que l'état interne reste vide, et le critère est ignoré.
+    // On aligne donc l'état sur ce qui est montré, dès la construction.
+    if (String(f.val) !== 'true' && String(f.val) !== 'false') f.val = 'true';
+    return '<select class="val sv">'
+      + '<option value="true"' + (String(f.val) === 'true' ? ' selected' : '') + '>' + esc(T('oui')) + '</option>'
+      + '<option value="false"' + (String(f.val) === 'false' ? ' selected' : '') + '>' + esc(T('non')) + '</option></select>';
+  }
+  if (c.type === 'date' || c.type === 'num'){
+    return '<input type="number" class="val sv" value="' + esc(f.val) + '" placeholder="'
+      + (c.type === 'date' ? T('nbJours') : T('valeur')) + '" style="width:150px">';
+  }
+  var vals = (c.top || []).map(function(t){ return t[0]; }).sort(function(a, b){ return a.localeCompare(b, LOC()); });
+  if (vals.length && vals.length <= 80){
+    var html = '<select class="val sv"><option value="">' + esc(T('choisir')) + '</option>';
+    var found = false;
+    html += vals.map(function(v){
+      if (v === f.val) found = true;
+      return '<option value="' + esc(v) + '"' + (v === f.val ? ' selected' : '') + '>' + esc(v.substring(0, 70)) + '</option>';
+    }).join('');
+    if (f.val && !found) {
+      html += '<option value="' + esc(f.val) + '" selected>' + esc(String(f.val).substring(0, 70)) + '</option>';
+    }
+    return html + '</select>';
+  }
+  return '<input type="text" class="val sv" list="dlv' + i + '" value="' + esc(f.val) + '" placeholder="' + T('saisirValeur') + '">'
+    + '<datalist id="dlv' + i + '">' + vals.slice(0, 200).map(function(v){ return '<option value="' + esc(v) + '">'; }).join('') + '</datalist>';
+}
+
+function renderSimple(){
+  var cols = (S.simpleCols && S.simpleCols.length) ? S.simpleCols : colsDispo(COLS_DEFAUT);
+  S.simpleCols = cols;
+  document.getElementById('sCols').textContent = T('colonnes').replace('{n}', cols.length);
+  document.getElementById('sCount').textContent = T('compteSur')
+    .replace('{n}', nb(S.result.length))
+    .replace('{s}', S.result.length > 1 ? 's' : '')
+    .replace('{t}', nb(S.rows.length));
+
+  var attente = S.filters.filter(function(f){
+    return f.path && f.val === '' && f.op !== 'empty' && f.op !== 'nempty';
+  });
+  var box = document.getElementById('sTable');
+  if (attente.length){
+    box.innerHTML = '<div class="snone"><b>' + esc(T('critereACompleter')) + '</b>'
+      + esc(T('choisisValeur').replace('{c}', labelOf(attente[0].path))) + '</div>';
+    return;
+  }
+  if (!S.result.length){
+    box.innerHTML = '<div class="snone"><b>' + esc(T('aucunResultat')) + '</b>'
+      + esc(T('aucunResultatAide')) + '</div>';
+  } else {
+    var n = S.simpleShown || 25;
+    var page = S.result.slice(0, n);
+    box.innerHTML = '<table class="md3-table"><thead><tr>'
+      + cols.map(function(p){ return '<th>' + esc(labelOf(p)) + '</th>'; }).join('')
+      + '</tr></thead><tbody>'
+      + page.map(function(r, i){
+          return '<tr data-srow="' + i + '">' + cols.map(function(p, ci){
+            var vs = r.f[p] || [];
+            var txt = vs.length ? vs.map(cell).join(' · ') : '<span class="sep">—</span>';
+            return '<td class="' + (ci === 0 ? 'mail' : '') + '">' + txt + '</td>';
+          }).join('') + '</tr>';
+        }).join('')
+      + '</tbody></table>'
+      + (S.result.length > n
+          ? '<div style="padding:16px;text-align:center;"><button class="btn smore" data-smore>' + esc(T('afficherPlus').replace('{n}', nb(S.result.length - n))) + '</button></div>'
+          : '');
+  }
+
+  // Le pont : la même question, écrite en syntaxe experte.
+  var b = document.getElementById('sBridge');
+  var act = S.filters.filter(function(f){ return f.path; });
+  b.innerHTML = act.length
+    ? T('pontAvec') + ' ' + act.map(function(f){
+        return '<code>' + prettyPath(f.path) + ' <em>' + opLabel(f.op) + '</em>'
+             + (f.val ? ' ' + esc(f.val) : '') + '</code>';
+      }).join(' ' + (S.logic === 'AND' ? 'ET' : 'OU') + ' ')
+    : T('pontSans').replace('{c}', S.catalog.length).replace('{l}', (S.labels || []).length);
+}
+
+/**
+ * Sélecteur de colonnes du mode simple. Il puise dans le même vocabulaire
+ * métier que les critères : l'utilisateur qui sait filtrer sur « Service »
+ * sait afficher « Service ».
+ */
+function renderColsPanel(){
+  var box = document.getElementById('sColsPanel');
+  var cols = S.simpleCols || [];
+  var vus = {}, html = '', grp = '';
+
+  (S.labels || []).forEach(function(L){
+    if (L.g !== grp){ grp = L.g; html += '<div class="cgrp">' + esc(grp) + '</div>'; }
+    vus[L.p] = 1;
+    html += '<label class="copt"><input type="checkbox" data-col="' + esc(L.p) + '"'
+          + (cols.indexOf(L.p) !== -1 ? ' checked' : '') + '>' + esc(L.l) + '</label>';
+  });
+
+  // colonnes conseillées par une question mais hors vocabulaire courant
+  var autres = cols.filter(function(p){ return !vus[p]; });
+  if (autres.length){
+    html += '<div class="cgrp">' + esc(T('colonneAutre')) + '</div>'
+          + autres.map(function(p){
+              return '<label class="copt"><input type="checkbox" data-col="' + esc(p) + '" checked>'
+                   + esc(labelOf(p)) + '</label>';
+            }).join('');
+  }
+
+  box.innerHTML = '<div class="ttl">' + esc(T('colonnesTitre')) + '</div>'
+    + '<div class="aide">' + esc(T('colonnesAide').replace('{c}', S.catalog.length)) + '</div>'
+    + '<div class="cgrid">' + html + '</div>'
+    + '<div class="cfoot"><button class="btn" id="sColsReset">' + esc(T('colonnesReinit')) + '</button>'
+    + (cols.length > 8 ? '<span class="hint">' + esc(T('colonnesMax').replace('{n}', cols.length)) + '</span>' : '')
+    + '</div>';
+
+  document.getElementById('sCols').textContent = T('colonnes').replace('{n}', cols.length);
+}
+
+function toggleSimpleCol(p, actif){
+  var cols = (S.simpleCols || []).slice();
+  var i = cols.indexOf(p);
+  if (actif && i === -1) cols.push(p);
+  if (!actif && i !== -1) cols.splice(i, 1);
+  if (!cols.length) cols = ['primaryEmail'];      // au moins une colonne
+  S.simpleCols = cols;
+  S.colsManuelles = true;
+  renderColsPanel();
+  renderSimple();
+}
+
+function applySimpleQuestion(i){
+  var q = QUESTIONS[i];
+  S.logic = 'AND';
+  S.filters = q.f.map(function(f){ return { path: resolvePath(f[0]), op: f[1], val: f[2] }; });
+  S.simpleCols = colsDispo(q.c || COLS_DEFAUT);
+  S.colsManuelles = false;      // une question rétablit ses colonnes conseillées
+  S.questionCols = S.simpleCols.slice();
+  S.expertCols = null;          // invalider la sélection experte pour propager la vue conseillée
+  S.simpleShown = 25;
+  renderColsPanel();
+  document.querySelectorAll('#qcards .qc').forEach(function(el){ el.classList.toggle('on', +el.dataset.q === i); });
+  renderSRows(); applyQuery();
+  if (q.ask){
+    var sel = document.querySelector('#sRows .srow .sv');
+    if (sel){ sel.focus(); }
+  }
+}
+
+/** Point unique de changement de combinaison : les deux surfaces restent
+    synchronisées et l'état affiché ne peut pas diverger de l'état réel. */
+function setLogic(lg){
+  S.logic = (lg === 'OR') ? 'OR' : 'AND';
+  document.querySelectorAll('[data-lg]').forEach(function(b){
+    b.classList.toggle('on', b.dataset.lg === S.logic);
+  });
+  renderFilters();
+  if (S.mode === 'simple') renderSRows();
+  applyQuery();
+}
+
+/** Applique la langue à tout le balisage statique puis redessine. */
+function applyStatic(){
+  document.querySelectorAll('[data-i18n]').forEach(function(el){ el.textContent = T(el.dataset.i18n); });
+  document.querySelectorAll('[data-i18n-ph]').forEach(function(el){ el.placeholder = T(el.dataset.i18nPh); });
+  document.querySelectorAll('[data-i18n-ti]').forEach(function(el){ el.title = T(el.dataset.i18nTi); });
+  document.querySelectorAll('[data-pp]').forEach(function(el){ el.textContent = el.dataset.pp + ' ' + T('parPage'); });
+  document.querySelectorAll('[data-lang]').forEach(function(b){ b.classList.toggle('on', b.dataset.lang === LANG); });
+  document.documentElement.lang = LANG;
+  var t = document.getElementById('loadTxt');
+  if (t && !t.textContent) t.textContent = T('connexion');
+}
+
+function setLang(lg){
+  LANG = (lg === 'en') ? 'en' : 'fr';
+  applyStatic();
+  if (S.catalog.length){
+    buildLabels();          // les libellés du socle changent de langue
+    renderPresets();
+    renderQCards();
+  }
+  renderFilters();
+  if (S.mode === 'simple'){
+    renderSRows();
+    var pan = document.getElementById('sColsPanel');
+    if (pan && !pan.hidden) renderColsPanel();
+  }
+  google.script.run.apiSetPref('lang', LANG);
+  render();
+}
+
+function switchMode(m){
+  S.mode = m;
+  document.body.classList.toggle('simple', m === 'simple');
+  document.querySelectorAll('.ms').forEach(function(b){ b.classList.toggle('on', b.dataset.mode === m); });
+  if (m === 'simple'){
+    S.expertCols = S.cols.slice();
+    // un critère posé en expert peut ne pas être exprimable ici : on le dit.
+    var hors = S.filters.filter(function(f){ return f.path && S.labelPath.indexOf(f.path) === -1; });
+    document.getElementById('sExp').textContent = T('ouvrirExpert');
+    renderSRows();
+    if (hors.length){
+      document.getElementById('sBridge').innerHTML = '';
+      banner('warn', T('criteresHors').replace('{n}', hors.length)
+        .replace('{p}', hors.map(function(f){ return f.path; }).join(', ')));
+    }
+  } else {
+    if (S.expertCols && S.expertCols.length) S.cols = S.expertCols.slice();
+    else if (S.simpleCols && S.simpleCols.length) S.cols = S.simpleCols.slice();
+    // La requête suit : les critères vivent déjà dans S.filters, mais la zone
+    // de requête experte n'était jamais redessinée — ils s'appliquaient sans
+    // être visibles ni modifiables.
+    renderFilters();
+    document.getElementById('globalSearch').value = S.search || '';
+    document.querySelectorAll('[data-lg]').forEach(function(b){
+      b.classList.toggle('on', b.dataset.lg === S.logic);
+    });
+    var n = S.filters.filter(function(f){ return f.path; }).length;
+    if (n) toast(T('repriseCriteres').replace('{n}', n));
+  }
+  google.script.run.apiSetPref('mode', m);
+  render();
+}
+
+function bindSimple(){
+  S.labels = [];  S.labelPath = [];   // construits après indexation
+
+  document.getElementById('qcards').addEventListener('click', function(e){
+    var b = e.target.closest('[data-q]'); if (b) applySimpleQuestion(+b.dataset.q);
+  });
+
+  document.getElementById('sRows').addEventListener('change', function(e){
+    var row = e.target.closest('.srow'); if (!row) return;
+    var i = +row.dataset.i;
+    if (e.target.classList.contains('sf')){
+      S.filters[i].path = e.target.value;
+      S.filters[i].val = '';
+      var c = S.byPath[e.target.value];
+      S.filters[i].op = opsFor(c ? c.type : 'str')[0][0];
+      renderSRows();
+    } else if (e.target.classList.contains('so')){
+      S.filters[i].op = e.target.value;
+      renderSRows();
+    } else if (e.target.classList.contains('sv')){
+      S.filters[i].val = e.target.value;
+    }
+    S.simpleShown = 25;
+    applyQuery();
+  });
+
+  document.getElementById('sRows').addEventListener('input', debounce(function(e){
+    if (e.target.classList.contains('sv') && e.target.tagName === 'INPUT'){
+      var i = +e.target.closest('.srow').dataset.i;
+      S.filters[i].val = e.target.value;
+      S.simpleShown = 25;
+      applyQuery();
+    }
+  }, 300));
+
+  document.getElementById('sRows').addEventListener('click', function(e){
+    if (e.target.hasAttribute('data-sdel')){
+      S.filters.splice(+e.target.closest('.srow').dataset.i, 1);
+      renderSRows(); applyQuery();
+    }
+  });
+
+  document.getElementById('sLogic').addEventListener('click', function(e){
+    var b = e.target.closest('[data-lg]'); if (b) setLogic(b.dataset.lg);
+  });
+
+  document.getElementById('sAdd').addEventListener('click', function(){
+    var first = S.labelPath[0]; if (!first) return;
+    var c = S.byPath[first];
+    S.filters.push({ path: first, op: opsFor(c ? c.type : 'str')[0][0], val: '' });
+    renderSRows(); applyQuery();
+  });
+
+  document.getElementById('sClear').addEventListener('click', function(){
+    S.filters = []; S.search = ''; S.logic = 'AND'; S.simpleCols = [];
+    document.querySelectorAll('#qcards .qc').forEach(function(el){ el.classList.remove('on'); });
+    renderSRows(); applyQuery();
+  });
+
+  document.getElementById('sTable').addEventListener('click', function(e){
+    if (e.target.closest('[data-smore]')){ S.simpleShown = (S.simpleShown || 25) + 25; renderSimple(); return; }
+    var tr = e.target.closest('[data-srow]');
+    if (tr) openUser(+tr.dataset.srow);
+  });
+
+  document.getElementById('sCsv').addEventListener('click', function(){
+    var keep = S.cols;
+    S.cols = (S.simpleCols && S.simpleCols.length) ? S.simpleCols : colsDispo(COLS_DEFAUT);
+    exportCsv();
+    S.cols = keep;
+  });
+
+  document.getElementById('sSheet').addEventListener('click', function(){
+    var keep = S.cols;
+    S.cols = (S.simpleCols && S.simpleCols.length) ? S.simpleCols : colsDispo(COLS_DEFAUT);
+    exportSheet();      // les lignes sont préparées avant l'appel asynchrone
+    S.cols = keep;
+  });
+
+  document.getElementById('sCols').addEventListener('click', function(){
+    var pan = document.getElementById('sColsPanel');
+    if (pan.hidden) renderColsPanel();
+    pan.hidden = !pan.hidden;
+  });
+
+  document.getElementById('sColsPanel').addEventListener('change', function(e){
+    if (e.target.dataset.col) toggleSimpleCol(e.target.dataset.col, e.target.checked);
+  });
+
+  document.getElementById('sColsPanel').addEventListener('click', function(e){
+    if (e.target.id === 'sColsReset'){
+      S.simpleCols = (S.questionCols && S.questionCols.length)
+        ? S.questionCols.slice() : colsDispo(COLS_DEFAUT);
+      S.colsManuelles = false;
+      renderColsPanel(); renderSimple();
+    }
+  });
+
+  document.getElementById('sExp').addEventListener('click', function(){ switchMode('expert'); });
+
+  document.querySelectorAll('.ms').forEach(function(b){
+    b.addEventListener('click', function(){ switchMode(this.dataset.mode); });
+  });
+}
+
+/* ==========================================================================
+ *  BARRE D'OUTILS — filtre OU, comptes supprimés, vues sauvegardées
+ * ======================================================================== */
+function populateOuFilter(list){
+  var sel = document.getElementById('ouFilter');
+  var cur = S.orgUnit || sel.value || '';
+  sel.innerHTML = '<option value="">' + esc(T('toutesOU')) + '</option>'
+    + (list || []).filter(function(o){ return o && o !== '/'; })
+        .map(function(o){ return '<option value="' + esc(o) + '"' + (o === cur ? ' selected' : '') + '>' + esc(o) + '</option>'; })
+        .join('');
+}
+
+function renderViewsMenu(){
+  var sel = document.getElementById('viewsSel');
+  var names = Object.keys(S.views || {}).sort(function(a, b){ return a.localeCompare(b, LOC()); });
+  sel.innerHTML = '<option value="">' + esc(T('choisirVue')) + '</option>'
+    + names.map(function(n){ return '<option value="' + esc(n) + '">' + esc(n) + '</option>'; }).join('');
+}
+
+function persistViews(){
+  google.script.run.apiSetPref('views', JSON.stringify(S.views || {}));
+}
+
+function saveCurrentView(){
+  var name = (window.prompt(T('nomVue')) || '').trim();
+  if (!name) return;
+  S.views[name] = {
+    mode: S.mode, logic: S.logic, search: S.search,
+    sort: { path: S.sort.path, dir: S.sort.dir },
+    filters: S.filters.map(function(f){ return { path: f.path, op: f.op, val: f.val }; }),
+    cols: S.cols.slice(), simpleCols: (S.simpleCols || []).slice()
+  };
+  persistViews();
+  renderViewsMenu();
+  document.getElementById('viewsSel').value = name;
+  toast(T('vueEnregistree').replace('{v}', name));
+}
+
+function deleteCurrentView(){
+  var sel = document.getElementById('viewsSel');
+  var name = sel.value;
+  if (!name || !S.views[name]) return;
+  delete S.views[name];
+  persistViews();
+  renderViewsMenu();
+  toast(T('vueSupprimee').replace('{v}', name));
+}
+
+function applyView(name){
+  var v = (S.views || {})[name];
+  if (!v) return;
+  // la bascule de mode d'abord : elle manipule les colonnes (expertCols)
+  if (v.mode && v.mode !== S.mode) switchMode(v.mode);
+  S.logic = v.logic === 'OR' ? 'OR' : 'AND';
+  S.search = v.search || '';
+  S.sort = (v.sort && v.sort.path) ? v.sort : { path: 'primaryEmail', dir: 1 };
+  S.filters = (v.filters || []).map(function(f){ return { path: f.path, op: f.op, val: f.val }; });
+  if (v.cols && v.cols.length){ S.cols = v.cols.slice(); S.expertCols = v.cols.slice(); }
+  if (v.simpleCols && v.simpleCols.length) S.simpleCols = v.simpleCols.slice();
+  document.getElementById('globalSearch').value = S.search;
+  document.querySelectorAll('[data-lg]').forEach(function(b){ b.classList.toggle('on', b.dataset.lg === S.logic); });
+  renderFilters();
+  if (S.mode === 'simple') renderSRows();
+  applyQuery();
+}
+
+/* ==========================================================================
+ *  TUILES KPI (mode simple) — mêmes chemins que le moteur de filtres
+ * ======================================================================== */
+var KPIS = [
+  { k:'kpiTotal',     alert:false, test:function(f){ return true; }, f:[] },
+  { k:'kpiSans2sv',   alert:true,  test:function(f){ return (f['isEnrolledIn2Sv'] || [])[0] === false && (f['suspended'] || [])[0] !== true; },
+                      f:[['isEnrolledIn2Sv','eq','false'],['suspended','eq','false']] },
+  { k:'kpiAdmins',    alert:false, test:function(f){ return (f['calc.estAdmin'] || [])[0] === true; }, f:[['calc.estAdmin','eq','true']] },
+  { k:'kpiJamais',    alert:false, test:function(f){ return (f['calc.jamaisConnecte'] || [])[0] === true; }, f:[['calc.jamaisConnecte','eq','true']] },
+  { k:'kpiSuspendus', alert:false, test:function(f){ return (f['suspended'] || [])[0] === true; }, f:[['suspended','eq','true']] },
+  { k:'kpiAlertes',   alert:true,  test:function(f){ return ((f['calc.nbAlertes'] || [])[0] || 0) >= 1; }, f:[['calc.nbAlertes','gte','1']] }
+];
+
+function renderKpis(){
+  var box = document.getElementById('kpis');
+  if (!box) return;
+  box.innerHTML = KPIS.map(function(k, i){
+    var n = 0;
+    S.rows.forEach(function(r){ if (k.test(r.f)) n++; });
+    return '<button class="kpi' + (k.alert && n > 0 ? ' alert' : '') + '" data-kpi="' + i + '">'
+         + '<b>' + nb(n) + '</b><span>' + esc(T(k.k)) + '</span></button>';
+  }).join('');
+}
+
+/* ==========================================================================
+ *  ANOMALIES — règles croisées sur l'ensemble des comptes chargés.
+ *  Calculées une seule fois par chargement (S.anomalies), à la demande.
+ * ======================================================================== */
+function computeAnomalies(){
+  if (S.anomalies) return S.anomalies;
+
+  var emails = {};
+  S.rows.forEach(function(r){
+    var u = r.u;
+    if (u.primaryEmail) emails[String(u.primaryEmail).toLowerCase()] = u;
+    (u.aliases || []).forEach(function(a){ emails[String(a).toLowerCase()] = u; });
+  });
+
+  var byName = {}, byPhone = {}, byRecovery = {}, mgrAbsent = [], mgrSuspendu = [];
+  S.rows.forEach(function(r){
+    var u = r.u;
+    var nom = ((u.name && u.name.fullName) || '').trim().toLowerCase();
+    if (nom) (byName[nom] = byName[nom] || []).push(r);
+
+    var vus = {};
+    (u.phones || []).forEach(function(p){
+      var d = String(p.value || '').replace(/\D/g, '');
+      if (d.length < 6 || vus[d]) return;
+      vus[d] = 1;
+      (byPhone[d] = byPhone[d] || []).push(r);
+    });
+
+    var rec = String(u.recoveryEmail || '').toLowerCase();
+    if (rec) (byRecovery[rec] = byRecovery[rec] || []).push(r);
+
+    (u.relations || []).forEach(function(rel){
+      if (rel.type !== 'manager' || !rel.value) return;
+      var m = emails[String(rel.value).toLowerCase()];
+      if (!m) mgrAbsent.push({ r: r, d: rel.value });
+      else if (m.suspended) mgrSuspendu.push({ r: r, d: rel.value });
+    });
+  });
+
+  function doublons(map){
+    var out = [];
+    Object.keys(map).forEach(function(k){
+      if (map[k].length > 1) map[k].forEach(function(r){ out.push({ r: r, d: k }); });
+    });
+    return out;
+  }
+
+  S.anomalies = [
+    { k:'anomNom',         rows: doublons(byName) },
+    { k:'anomTel',         rows: doublons(byPhone) },
+    { k:'anomRecovery',    rows: doublons(byRecovery) },
+    { k:'anomMgrAbsent',   rows: mgrAbsent },
+    { k:'anomMgrSuspendu', rows: mgrSuspendu }
+  ];
+  return S.anomalies;
+}
+
+function renderAnomalies(){
+  var v = document.getElementById('viewAnomalies');
+  var groups = computeAnomalies().filter(function(g){ return g.rows.length; });
+  if (!groups.length){
+    v.innerHTML = '<div class="anom-empty">' + esc(T('anomAucune')) + '</div>';
+    return;
+  }
+  v.innerHTML = groups.map(function(g){
+    return '<div class="anom-h"><strong>' + esc(T(g.k)) + '</strong>'
+         + '<span class="tag f">' + esc(T('anomComptes').replace('{n}', g.rows.length)) + '</span></div>'
+      + '<table class="pv"><tbody>'
+      + g.rows.map(function(x){
+          var u = x.r.u;
+          return '<tr><td class="v" data-mail="' + esc(u.primaryEmail || '') + '" style="width:34%">' + esc(u.primaryEmail || '') + '</td>'
+               + '<td style="width:30%">' + esc((u.name && u.name.fullName) || '') + '</td>'
+               + '<td>' + esc(x.d) + '</td></tr>';
+        }).join('')
+      + '</tbody></table>';
+  }).join('');
+  v.querySelectorAll('[data-mail]').forEach(function(td){
+    td.addEventListener('click', function(){ openByEmail(this.dataset.mail); });
+  });
+}
+
+function openByEmail(mail){
+  var hit = S.rows.filter(function(r){ return r.u.primaryEmail === mail; })[0];
+  if (hit) openRow(hit);
+}
+
+/* ==========================================================================
+ *  JOURNAL D'USAGE — traçabilité des consultations et exports
+ * ======================================================================== */
+function logEvent(action, n){
+  try { google.script.run.apiLogEvent(action, n || 0); } catch (e) { /* jamais bloquant */ }
+}
+
+function renderUsageLog(){
+  var box = document.getElementById('usageLog');
+  box.innerHTML = '<div class="hint">…</div>';
+  google.script.run.withSuccessHandler(function(res){
+    if (!res || !res.ok || !res.entries || !res.entries.length){
+      box.innerHTML = '<div class="hint">' + esc(T('journalVide')) + '</div>';
+      return;
+    }
+    box.innerHTML = '<table>' + res.entries.map(function(e){
+      var d = new Date(e.t);
+      var act = e.a === 'load' ? T('actLoad') : (e.a === 'export' ? T('actExport') : (e.a === 'sheet' ? T('actSheet') : e.a));
+      return '<tr><td>' + esc(isNaN(d.getTime()) ? String(e.t) : d.toLocaleString(LOC())) + '</td>'
+           + '<td>' + esc(e.u || '') + '</td><td>' + esc(act) + '</td><td>' + nb(e.n || 0) + '</td></tr>';
+    }).join('') + '</table>';
+  }).withFailureHandler(function(){
+    box.innerHTML = '<div class="hint">' + esc(T('journalVide')) + '</div>';
+  }).apiGetLog();
+}
+
+/* ==========================================================================
+ *  CHARGEMENT
+ * ======================================================================== */
+function load(force){
+  var box = document.getElementById('loader');
+  box.classList.remove('off');
+  S.raw = []; S.rows = []; S.catalog = []; S.byPath = {}; S.schemas = []; S.legacyTried = false; S.t0 = Date.now(); S.batches = 0; S.cachedAll = true;
+  S.anomalies = null;
+  S.orgUnit = document.getElementById('ouFilter').value || '';
+  S.showDeleted = document.getElementById('showDeleted').checked;
+  document.getElementById('banners').innerHTML = '';
+  setProgress(0, force ? T('rechargementApi') : T('connexion'));
+  nextBatch('', !!force);
+}
+
+function nextBatch(token, force){
+  google.script.run
+    .withSuccessHandler(function(res){ onBatch(res, force); })
+    .withFailureHandler(function(e){ onBatchFail(e, force); })
+    .apiLoadBatch({ pageToken: token, force: force, loaded: S.raw.length,
+                    orgUnitPath: S.orgUnit, showDeleted: S.showDeleted });
+}
+
+/**
+ * Si le déploiement en service est antérieur à l'ajout de apiLoadBatch,
+ * on bascule sur apiLoadUsers (chargement en une seule réponse) plutôt que
+ * d'échouer. Le message reste explicite : c'est bien une version à republier.
+ */
+function onBatchFail(err, force){
+  var msg = (err && err.message) ? err.message : String(err);
+  if (/introuvable|not found|not a function/i.test(msg) && !S.legacyTried){
+    S.legacyTried = true;
+    banner('warn', T('deploiementAncien'));
+    setProgress(0.15, T('chargementCompat'));
+    google.script.run
+      .withSuccessHandler(onLegacy)
+      .withFailureHandler(onFail)
+      .apiLoadUsers({ force: !!force });
+    return;
+  }
+  onFail(err);
+}
+
+function onLegacy(res){
+  if (!res || !res.ok){ onFail({ message: srvMsg(res) }); return; }
+  S.source = res.source;
+  S.schemas = res.schemas || [];
+  if (res.warningCode) S.warning = T(res.warningCode).replace('{e}', res.warning || '');
+  else if (res.warning) S.warning = res.warning;
+  S.batches = 1;
+  S.cachedAll = !!res.cached;
+  S.raw = res.users || [];
+  setProgress(0.6, T('comptesIndexes').replace('{n}', nb(S.raw.length)));
+  setTimeout(function(){
+    indexRows(S.raw);
+    setProgress(1, T('constructionCat'));
+    setTimeout(finishLoad, 30);
+  }, 30);
+}
+
+function onBatch(res, force){
+  if (!res || !res.ok){
+    banner('err', srvMsg(res));
+    if (S.raw && S.raw.length > 0) {
+      toast(T('chargementIncomplet').replace('{n}', nb(S.raw.length)));
+      setProgress(1, T('constructionCat'));
+      setTimeout(finishLoad, 30);
+    } else {
+      document.getElementById('loader').classList.add('off');
+    }
+    return;
+  }
+  S.batches++;
+  if (!res.cached) S.cachedAll = false;
+  S.raw = S.raw.concat(res.users || []);
+  if (res.schemas) S.schemas = res.schemas;
+  if (res.orgUnits) populateOuFilter(res.orgUnits);
+  if (res.source) S.source = res.source;
+  if (res.warningCode) S.warning = T(res.warningCode).replace('{e}', res.warning || '');
+  else if (res.warning) S.warning = res.warning;
+  S.maxUsers = res.maxUsers || 9000;
+
+  // la requête suivante part AVANT l'indexation : réseau et CPU se recouvrent
+  if (res.nextPageToken) nextBatch(res.nextPageToken, force);
+
+  indexRows(res.users || []);
+  setProgress(S.rows.length / S.maxUsers, T('comptesIndexes').replace('{n}', nb(S.rows.length)));
+
+  if (!res.nextPageToken){
+    setProgress(1, T('constructionCat'));
+    setTimeout(finishLoad, 30);
+  }
+}
+
+function finishLoad(){
+  buildIndex();
+  buildLabels();      // vocabulaire recalé sur les champs réels du domaine
+  renderPresets();
+  renderQCards();
+  renderSRows();
+  document.getElementById('loader').classList.add('off');
+
+  var b = document.getElementById('srcBadge');
+  b.className = 'badge ' + (S.source === 'api' ? 'api' : 'demo');
+  b.textContent = S.source === 'api' ? T('srcApi') : T('srcDemo');
+  document.getElementById('topStat').innerHTML =
+    '<b>' + nb(S.rows.length) + '</b> ' + T('comptes') + ' · <b>' + S.catalog.length + '</b> ' + T('chemins') + ' · '
+    + (S.cachedAll ? T('cache') : (Date.now() - S.t0) + ' ms') + ' · ' + S.batches + ' ' + (S.batches > 1 ? T('tranches') : T('tranche'));
+
+  if (S.warning) banner('warn', S.warning);
+  if (S.rows.length >= S.maxUsers){
+    banner('warn', T('plafondAtteint').replace('{n}', nb(S.rows.length)));
+  }
+  renderKpis();
+  logEvent('load', S.rows.length);
+  applyQuery();
+}
+
+function setProgress(ratio, txt){
+  document.getElementById('loadTxt').textContent = txt;
+  var bar = document.getElementById('loadBar');
+  if (bar) bar.style.width = Math.min(100, Math.round(ratio * 100)) + '%';
+}
+
+function onFail(err){
+  document.getElementById('loader').classList.add('off');
+  banner('err', T('echecChargement') + (err && err.message ? err.message : err));
+}
+function banner(kind, msg){
+  var d = document.createElement('div');
+  d.className = 'banner ' + kind;
+  d.textContent = msg;
+  document.getElementById('banners').appendChild(d);
+}
+
+/* ==========================================================================
+ *  ÉVÉNEMENTS
+ * ======================================================================== */
+function debounce(fn, ms){
+  var t; return function(){ var a = arguments, c = this; clearTimeout(t); t = setTimeout(function(){ fn.apply(c, a); }, ms); };
+}
+
+document.addEventListener('DOMContentLoaded', function(){
+
+  renderPresets();
+
+  document.getElementById('presets').addEventListener('click', function(e){
+    var b = e.target.closest('[data-pre]'); if (!b) return;
+    var p = PRESETS[+b.dataset.pre];
+    setLogic(p.logic || 'AND');
+    S.filters = p.f.map(function(f){
+      // @remplissage : substitué par la liste de valeurs de remplissage du
+      // domaine, déclarée dans BRAND — jamais de valeur métier en dur ici.
+      var v = (f[2] === '@remplissage') ? BRAND.remplissage.join(',') : f[2];
+      return { path: resolvePath(f[0]), op: f[1], val: v };
+    });
+    renderFilters(); applyQuery();
+  });
+
+  document.getElementById('btnAddFilter').addEventListener('click', function(){
+    S.filters.push({ path: '', op: 'contains', val: '' });
+    renderFilters();
+    var last = document.querySelector('#filters .frow:last-child .fpath'); if (last) last.focus();
+  });
+
+  document.getElementById('segLogic').addEventListener('click', function(e){
+    var b = e.target.closest('[data-lg]'); if (!b) return;
+    setLogic(b.dataset.lg);
+  });
+
+  document.getElementById('btnReset').addEventListener('click', function(){
+    S.filters = []; S.search = '';
+    document.getElementById('globalSearch').value = '';
+    setLogic('AND');
+    renderFilters(); applyQuery();
+  });
+
+  document.getElementById('filters').addEventListener('input', debounce(function(e){
+    var row = e.target.closest('.frow'); if (!row) return;
+    var i = +row.dataset.i;
+    if (e.target.classList.contains('fpath')){
+      S.filters[i].path = e.target.value.trim();
+      updateHint(i);
+      var c = S.byPath[S.filters[i].path];
+      document.getElementById('dlValues').innerHTML = c
+        ? c.top.slice(0, 200).map(function(t){ return '<option value="' + esc(t[0]) + '">'; }).join('') : '';
+    }
+    if (e.target.classList.contains('fval')) S.filters[i].val = e.target.value;
+    applyQuery();
+  }, 260));
+
+  document.getElementById('filters').addEventListener('change', function(e){
+    var row = e.target.closest('.frow'); if (!row) return;
+    if (e.target.classList.contains('fop')){
+      S.filters[+row.dataset.i].op = e.target.value;
+      applyQuery();
+    }
+  });
+
+  document.getElementById('filters').addEventListener('click', function(e){
+    if (e.target.hasAttribute('data-del')){
+      S.filters.splice(+e.target.closest('.frow').dataset.i, 1);
+      renderFilters(); applyQuery();
+    }
+  });
+
+  document.getElementById('globalSearch').addEventListener('input', debounce(function(){
+    S.search = this.value; applyQuery();
+  }, 260));
+
+  document.getElementById('fieldSearch').addEventListener('input', debounce(renderFieldList, 150));
+
+  document.getElementById('fieldList').addEventListener('click', function(e){
+    var f = e.target.closest('.fld'); if (!f) return;
+    toggleCol(f.dataset.path);
+  });
+
+  document.querySelector('.side-f').addEventListener('click', function(e){
+    var b = e.target.closest('[data-cols]'); if (!b) return;
+    var k = b.dataset.cols;
+    if (k === 'clear'){ S.cols = ['primaryEmail']; }
+    else { S.cols = colsDispo(COLSETS[k]); }
+    render();
+  });
+
+  document.getElementById('viewResults').addEventListener('click', function(e){
+    var th = e.target.closest('[data-sort]');
+    if (th){
+      var p = th.dataset.sort;
+      S.sort = { path: p, dir: (S.sort.path === p ? -S.sort.dir : 1) };
+      applyQuery(); return;
+    }
+    var pg = e.target.closest('[data-pg]');
+    if (pg){
+      var max = Math.ceil(S.result.length / S.pageSize);
+      S.page = Math.min(max, Math.max(1, S.page + (+pg.dataset.pg)));
+      renderTable(); document.getElementById('viewResults').scrollTop = 0; return;
+    }
+    var tr = e.target.closest('[data-row]');
+    if (tr) openUser(+tr.dataset.row);
+  });
+
+  document.querySelectorAll('.tabs .tab').forEach(function(b){
+    b.addEventListener('click', function(){ switchTab(this.dataset.tab); });
+  });
+
+  document.getElementById('pageSize').addEventListener('change', function(){
+    S.pageSize = +this.value; S.page = 1; renderTable();
+  });
+
+  document.querySelectorAll('[data-dtab]').forEach(function(b){
+    b.addEventListener('click', function(){
+      S.dtab = this.dataset.dtab;
+      document.querySelectorAll('[data-dtab]').forEach(function(x){ x.classList.toggle('on', x.dataset.dtab === S.dtab); });
+      renderDrawer();
+    });
+  });
+
+  document.getElementById('dClose').addEventListener('click', closeDrawer);
+  document.getElementById('scrim').addEventListener('click', closeDrawer);
+  document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closeDrawer(); });
+
+  document.getElementById('dCopy').addEventListener('click', function(){
+    if (!S.current) return;
+    var txt = JSON.stringify(S.current.u, null, 2);
+    navigator.clipboard.writeText(txt).then(function(){ toast(T('jsonCopie')); },
+      function(){ toast(T('copieImpossible')); });
+  });
+
+  document.getElementById('btnExport').addEventListener('click', exportCsv);
+  document.getElementById('btnSheet').addEventListener('click', exportSheet);
+  document.getElementById('btnRefresh').addEventListener('click', function(){ load(true); });
+
+  document.getElementById('ouFilter').addEventListener('change', function(){ load(false); });
+  document.getElementById('showDeleted').addEventListener('change', function(){ load(false); });
+  document.getElementById('viewsSel').addEventListener('change', function(){ if (this.value) applyView(this.value); });
+  document.getElementById('viewSave').addEventListener('click', saveCurrentView);
+  document.getElementById('viewDel').addEventListener('click', deleteCurrentView);
+  document.getElementById('btnJournal').addEventListener('click', renderUsageLog);
+
+  document.getElementById('kpis').addEventListener('click', function(e){
+    var b = e.target.closest('[data-kpi]'); if (!b) return;
+    var k = KPIS[+b.dataset.kpi];
+    S.logic = 'AND';
+    S.filters = k.f.map(function(f){ return { path: resolvePath(f[0]), op: f[1], val: f[2] }; });
+    S.simpleShown = 25;
+    document.querySelectorAll('#qcards .qc').forEach(function(el){ el.classList.remove('on'); });
+    renderSRows(); applyQuery();
+  });
+
+  document.getElementById('btnAbout').addEventListener('click', function(){
+    document.getElementById('modalAbout').classList.add('on');
+  });
+  document.getElementById('btnAboutClose').addEventListener('click', function(){
+    document.getElementById('modalAbout').classList.remove('on');
+  });
+  document.getElementById('modalAbout').addEventListener('click', function(e){
+    if (e.target === this) this.classList.remove('on');
+  });
+
+  document.getElementById('brand').insertAdjacentHTML('afterbegin',
+    esc(BRAND.nom) + '&nbsp;<em>' + esc(BRAND.suffixe) + '</em>');
+  renderFilters();
+  bindSimple();
+  document.getElementById('langsw').addEventListener('click', function(e){
+    var b = e.target.closest('[data-lang]'); if (b) setLang(b.dataset.lang);
+  });
+
+  google.script.run.withSuccessHandler(function(p){
+    p = p || {};
+    LANG = (p.lang === 'en') ? 'en' : (p.lang === 'fr') ? 'fr'
+         : (String(p.locale).toLowerCase().indexOf('en') === 0 ? 'en' : 'fr');
+    applyStatic();
+    try { S.views = JSON.parse(p.views || '{}') || {}; } catch (e) { S.views = {}; }
+    renderViewsMenu();
+    switchModeSilent(p.mode === 'expert' ? 'expert' : 'simple');
+    load(false);
+  }).withFailureHandler(function(){
+    applyStatic(); renderViewsMenu(); switchModeSilent('simple'); load(false);
+  }).apiInit();
+});
+
+/** Applique le mode sans rendu ni écriture de préférence (amorçage). */
+/** Traduit un message d'erreur venu du serveur, qui ne connaît pas la langue. */
+function srvMsg(res){
+  if (!res) return T('reponseInvalide');
+  if (res.errorCode === 'accesRefuse') return T('accesRefuse').replace('{u}', res.user || '').replace('{r}', res.reason || '');
+  if (res.errorCode === 'adminSdk') return T('erreurAdminSdk').replace('{e}', res.error || '');
+  return res.error || T('reponseInvalide');
+}
+
+function switchModeSilent(m){
+  S.mode = m;
+  document.body.classList.toggle('simple', m === 'simple');
+  document.querySelectorAll('.ms').forEach(function(b){ b.classList.toggle('on', b.dataset.mode === m); });
+}
+</script>
