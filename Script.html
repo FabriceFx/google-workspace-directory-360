@@ -1902,35 +1902,52 @@ function deburr_(s){
   return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
-/* Dernier segment d'OU réservé aux comptes non-humains. Comparaison sur le
-   segment exact (et non une sous-chaîne du chemin) : sans quoi « /Ressources
-   Humaines » ou « /Temps partiel » feraient passer tout le service pour des
-   comptes de service. */
+/* Segments d'OU réservés aux comptes non-humains ou techniques.
+   La vérification teste chaque segment de l'arborescence (ex: /Comptes Techniques/Magasins/...)
+   par correspondance exacte de mot pour éviter les faux positifs (/Ressources Humaines). */
 var OU_GENERIC = {
-  'services':1,'service':1,'salles':1,'salle':1,'materiel':1,'materiels':1,
-  'ressources partagees':1,'comptes de service':1,'comptes generiques':1,
-  'generiques':1,'robots':1,'bots':1,'invites':1,'visiteurs':1,
-  'prestataires':1,'externes':1,'equipements':1,'equipement':1
+  'comptes techniques': 1, 'compte technique': 1,
+  'comptes de service': 1, 'compte de service': 1,
+  'comptes generiques': 1, 'compte generique': 1,
+  'services techniques': 1, 'service technique': 1,
+  'techniques': 1, 'technique': 1,
+  'maintenance': 1,
+  'magasins': 1, 'magasin': 1,
+  'boutiques': 1, 'boutique': 1,
+  'points de vente': 1, 'point de vente': 1,
+  'caisses': 1, 'caisse': 1,
+  'agences': 1, 'agence': 1,
+  'sites': 1, 'site': 1,
+  'depots': 1, 'depot': 1,
+  'ateliers': 1, 'atelier': 1,
+  'ressources partagees': 1,
+  'materiel': 1, 'materiels': 1,
+  'equipements': 1, 'equipement': 1,
+  'salles': 1, 'salle': 1, 'rooms': 1, 'room': 1,
+  'robots': 1, 'robot': 1, 'bots': 1, 'bot': 1,
+  'prestataires': 1, 'prestataire': 1,
+  'externes': 1, 'externe': 1,
+  'invites': 1, 'invite': 1, 'visiteurs': 1, 'visiteur': 1,
+  'generiques': 1, 'generique': 1
 };
 
 function isGenericAccount(u){
   if (!u) return false;
   var pfx = deburr_(u.primaryEmail).split('@')[0] || '';
   var name = deburr_((u.name && u.name.fullName) || '');
-  var seg = deburr_(u.orgUnitPath).split('/').filter(Boolean).pop() || '';
+  var ouSegments = deburr_(u.orgUnitPath).split('/').filter(Boolean);
 
-  // 1. Dernier segment d'OU dédié aux comptes non-humains (correspondance exacte)
-  if (OU_GENERIC[seg]) return true;
+  // 1. N'importe quel segment d'OU parent ou feuille dédié aux comptes techniques/génériques
+  if (ouSegments.some(function(seg){ return OU_GENERIC[seg.trim()]; })) return true;
 
-  // 2. Préfixe d'e-mail entièrement générique (boîte de rôle : contact@, rh@…)
-  if (/^(admin|contact|support|info|service|technique|helpdesk|billing|facturation|scanner|noreply|no-reply|api|dev|infra|bot|partage|salle|meeting|room|accueil|rh|recrutement|direction|secretariat|commercial|sales|marketing|compta|comptabilite|alert|alertes|notification|notifications|webhook|root|superadmin|administrateur|guest|invite|visiteur|visitor|externe|presta|prestataire|temp)$/.test(pfx)) return true;
+  // 2. Préfixe d'e-mail entièrement générique (boîte de rôle, service, magasin, maintenance…)
+  if (/^(admin|contact|support|info|service|technique|tech|maint|maintenance|sav|magasin|mag|boutique|shop|store|caisse|pos|pdv|depot|atelier|helpdesk|billing|facturation|scanner|scan|noreply|no-reply|api|dev|infra|bot|partage|salle|meeting|room|accueil|rh|recrutement|direction|secretariat|commercial|sales|marketing|compta|comptabilite|alert|alertes|notification|notifications|webhook|root|superadmin|administrateur|guest|invite|visiteur|visitor|externe|presta|prestataire|temp|tablette|kiosk|borne)$/.test(pfx)) return true;
 
-  // 3. Modèles avec séparateurs : admin.xxx, xxx.admin, ext-xxx, presta.xxx
-  if (/^(admin|adm|guest|invite|invit|ext|externe|presta)[._-]|[._-](admin|adm|guest|invite|ext|presta)$/.test(pfx)) return true;
+  // 3. Modèles avec séparateurs : admin.xxx, mag.xxx, maint-xxx, caisse.01, ext-xxx, presta.xxx
+  if (/^(admin|adm|guest|invite|invit|ext|externe|presta|maint|maintenance|mag|magasin|caisse|site|tech|sav|borne|tablette)[._-]|[._-](admin|adm|guest|invite|ext|presta|maint|mag|caisse|tech|sav)$/.test(pfx)) return true;
 
-  // 4. Nom complet contenant un mot-clé non-humain (mot entier, pour éviter de
-  //    capturer un patronyme qui contiendrait la sous-chaîne).
-  if (/\b(service|salle|room|scanner|bot|robot|generique|equipe|team|prestataire)\b/.test(name)) return true;
+  // 4. Nom complet contenant un mot-clé technique ou d'usage partagé
+  if (/\b(service|salle|room|scanner|bot|robot|generique|equipe|team|prestataire|maintenance|magasin|boutique|caisse|atelier|borne|tablette|kiosk|technique)\b/.test(name)) return true;
 
   return false;
 }
