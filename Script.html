@@ -2199,6 +2199,7 @@ function renderOrgChart(){
   if (rootSel){
     rootSel.addEventListener('change', function(){
       S_org.rootFocus = this.value;
+      S_org.centered = false;
       renderOrgChart();
     });
   }
@@ -2207,6 +2208,7 @@ function renderOrgChart(){
   if (resetRootBtn){
     resetRootBtn.addEventListener('click', function(){
       S_org.rootFocus = '';
+      S_org.centered = false;
       renderOrgChart();
     });
   }
@@ -2246,6 +2248,39 @@ function renderOrgChart(){
     });
   }
 
+  // Panoramique par glisser-déposer (Drag to Pan horizontal et vertical)
+  var mainEl = document.getElementById('orgMainEl');
+  if (mainEl){
+    orgBindGlobalMouseup_();
+    mainEl.addEventListener('mousedown', function(e){
+      if (e.target.closest('button') || e.target.closest('input') || e.target.closest('select') || e.target.closest('.org-card-toggle') || e.target.closest('.org-card-focus')) return;
+      orgDrag.down = true;
+      orgDrag.el = mainEl;
+      mainEl.classList.add('grabbing');
+      orgDrag.startX = e.clientX;
+      orgDrag.startY = e.clientY;
+      orgDrag.sLeft = mainEl.scrollLeft;
+      orgDrag.sTop = mainEl.scrollTop;
+    });
+    mainEl.addEventListener('mousemove', function(e){
+      if (!orgDrag.down) return;
+      e.preventDefault();
+      var dx = e.clientX - orgDrag.startX;
+      var dy = e.clientY - orgDrag.startY;
+      mainEl.scrollLeft = orgDrag.sLeft - dx;
+      mainEl.scrollTop = orgDrag.sTop - dy;
+    });
+
+    if (!S_org.centered){
+      S_org.centered = true;
+      setTimeout(function(){
+        if (mainEl.scrollWidth > mainEl.clientWidth){
+          mainEl.scrollLeft = (mainEl.scrollWidth - mainEl.clientWidth) / 2;
+        }
+      }, 40);
+    }
+  }
+
   function setZoom(val){
     S_org.zoom = Math.max(0.3, Math.min(1.8, Math.round(val * 100) / 100));
     var tree = document.getElementById('orgTreeEl');
@@ -2263,30 +2298,6 @@ function renderOrgChart(){
   var zRst = document.getElementById('btnOrgZoomReset');
   if (zRst) zRst.addEventListener('click', function(){ setZoom(1); });
 
-  // Panoramique par glisser-déposer. mainEl est recréé à chaque rendu (ses
-  // écouteurs disparaissent avec lui), mais le mouseup vit sur window : il ne
-  // doit être attaché qu'UNE fois, sinon les handlers s'empilent à chaque rendu.
-  var mainEl = document.getElementById('orgMainEl');
-  if (mainEl){
-    orgBindGlobalMouseup_();
-    mainEl.addEventListener('mousedown', function(e){
-      if (e.target.closest('button') || e.target.closest('input') || e.target.closest('select')) return;
-      orgDrag.down = true;
-      orgDrag.el = mainEl;
-      mainEl.classList.add('grabbing');
-      orgDrag.startX = e.pageX - mainEl.offsetLeft;
-      orgDrag.startY = e.pageY - mainEl.offsetTop;
-      orgDrag.sLeft = mainEl.scrollLeft;
-      orgDrag.sTop = mainEl.scrollTop;
-    });
-    mainEl.addEventListener('mousemove', function(e){
-      if (!orgDrag.down) return;
-      e.preventDefault();
-      mainEl.scrollLeft = orgDrag.sLeft - ((e.pageX - mainEl.offsetLeft) - orgDrag.startX);
-      mainEl.scrollTop = orgDrag.sTop - ((e.pageY - mainEl.offsetTop) - orgDrag.startY);
-    });
-  }
-
   v.querySelectorAll('.org-card-toggle').forEach(function(btn){
     btn.addEventListener('click', function(e){
       e.stopPropagation();
@@ -2301,6 +2312,7 @@ function renderOrgChart(){
       e.stopPropagation();
       var mail = this.dataset.focus;
       S_org.rootFocus = mail;
+      S_org.centered = false;
       renderOrgChart();
     });
   });

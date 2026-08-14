@@ -341,9 +341,9 @@ body.tab-orgchart .side, body.tab-anomalies .side{display:none}
 .org-zoom-lvl{padding:4px 7px;font-size:11.5px;font-family:var(--mono);color:var(--txt);border-left:1px solid var(--bord);border-right:1px solid var(--bord);min-width:44px;text-align:center;background:var(--gris)}
 
 /* --- Arbre hiérarchique CSS ------------------------------------------------- */
-.org-tree{display:flex;justify-content:center;padding:10px 0;width:max-content;min-width:100%}
-.org-tree ul{display:flex;padding-top:20px;position:relative;margin:0;padding-left:0;justify-content:center}
-.org-tree li{display:flex;flex-direction:column;align-items:center;position:relative;padding:20px 10px 0 10px;list-style-type:none}
+.org-tree{display:inline-flex;flex-direction:column;align-items:center;margin:0 auto;min-width:100%;width:max-content;padding:10px 80px 40px 80px;box-sizing:border-box;transform-origin:top center}
+.org-tree ul{display:flex;padding-top:20px;position:relative;margin:0 auto;padding-left:0;justify-content:center;width:max-content}
+.org-tree li{display:flex;flex-direction:column;align-items:center;position:relative;padding:20px 12px 0 12px;list-style-type:none}
 
 /* Connecteurs horizontaux et verticaux */
 .org-tree li::before, .org-tree li::after{content:'';position:absolute;top:0;right:50%;border-top:2px solid var(--bord);width:50%;height:20px}
