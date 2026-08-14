@@ -10,20 +10,24 @@ Toutes les modifications notables apportées à ce projet seront documentées da
 
 Un arbre hiérarchique n'a de valeur que s'il montre tout le monde à sa place — et qu'il tient debout face à des données imparfaites. Cette version corrige les angles morts de l'organigramme : personne ne disparaît plus, et une erreur de saisie ne fait plus planter la vue.
 
+- 🔒 **Contrôle d'accès interactif strict** : élimination complète de toute fuite d'autorisation via `Session.getEffectiveUser()` sur les endpoints clients, et protection de `reportDaily` contre les déclenchements interactifs non autorisés via `google.script.run`.
+- 💎 **Modernisation complète ES6+** : transition intégrale de la base de code (`Code.gs`, `Script.html`, `Index.html`) vers `const` / `let`, fonctions fléchées, méthodes de collection modernes (`includes`, `startsWith`, `Date.now`) et élimination des effets de bord de `var`.
 - 🐛 **Plus de gel sur données cycliques** : rupture des boucles de management (A↔B, auto-manager) via un ensemble de nœuds visités — fini le plantage de l'onglet par récursion infinie.
 - 🐛 **Personne ne disparaît** : les collaborateurs rattachés à un compte de rôle (`direction@`) et les managers pris dans une boucle sont désormais rattachés à la racine ou signalés « sans manager » au lieu d'être invisibles.
-- 🎯 **Détection des comptes techniques affinée** : correspondance sur le dernier segment d'unité organisationnelle (et non une sous-chaîne), avec normalisation des accents — un service « Ressources Humaines » ou « Temps partiel » n'est plus pris pour un lot de comptes de service.
+- 🎯 **Détection des comptes techniques affinée** : correspondance sur les conteneurs d'OU non-humains réels sans impacter les branches organisationnelles de terrain (sites, agences, ateliers, magasins), avec normalisation des accents.
 - ⚡ **Fluidité de la recherche** : recherche debouncée dans l'arbre, curseur préservé à sa position, et écouteur de panoramique attaché une seule fois (fin de la fuite mémoire).
 
 ### 🇺🇸 English
 
-**An org chart that never lies and never freezes.**
+**An org chart that never lies and never freezes, powered by modern ES6+.**
 
-A reporting tree is only useful if it shows everyone in their place — and stays standing on imperfect data. This release fixes the org chart's blind spots: nobody disappears anymore, and a data-entry mistake no longer crashes the view.
+A reporting tree is only useful if it shows everyone in their place — and stays standing on imperfect data. This release fixes the org chart's blind spots, enforces strict access control, and modernizes the entire codebase to modern JavaScript standards.
 
+- 🔒 **Strict interactive access control**: complete elimination of authorization bypass via `Session.getEffectiveUser()` on client endpoints, and protection of `reportDaily` against unauthorized interactive triggers via `google.script.run`.
+- 💎 **Full ES6+ modernization**: complete migration of the codebase (`Code.gs`, `Script.html`, `Index.html`) to `const` / `let`, arrow functions, modern collection helpers (`includes`, `startsWith`, `Date.now`), eliminating legacy `var` hoisting risks.
 - 🐛 **No more freeze on cyclic data**: management loops (A↔B, self-manager) are broken via a visited-node set — no more infinite-recursion crash of the tab.
 - 🐛 **Nobody disappears**: members reporting to a role account (`direction@`) and managers caught in a loop are now attached to the root or flagged "no manager" instead of vanishing.
-- 🎯 **Sharper service-account detection**: matching on the last org-unit segment (not a substring), with accent normalization — a "Ressources Humaines" or "Temps partiel" unit is no longer mistaken for service accounts.
+- 🎯 **Sharper service-account detection**: targeted non-human OU container matching without masking organizational field units (sites, branches, workshops, retail stores).
 - ⚡ **Smoother search**: debounced tree search, preserved caret position, and a pan listener bound only once (memory leak fixed).
 
 ## [1.16.0] - 2026-08-14

@@ -10,7 +10,7 @@
    CONFIGURATION — le seul bloc à modifier pour installer l'outil sur un autre
    environnement Google Workspace. Tout le reste est découvert à l'exécution.
    =========================================================================== */
-var BRAND = {
+const BRAND = {
   nom:        'Annuaire',
   suffixe:    '360°',
   couleur:    '#1a73e8',   // Google Blue
@@ -32,16 +32,16 @@ var BRAND = {
   maxChampsPersoTotal: 60
 };
 
-(function(){
-  var r = document.documentElement.style;
+(() => {
+  const r = document.documentElement.style;
   r.setProperty('--bleu', BRAND.couleur);
   r.setProperty('--bleu-fonce', BRAND.couleurF);
   r.setProperty('--rose', BRAND.accent);
   r.setProperty('--rose-txt', BRAND.accentTxt);
   r.setProperty('--sans', BRAND.police);
   r.setProperty('--mono', BRAND.policeFixe);
-  if (BRAND.polices){
-    var l = document.createElement('link');
+  if (BRAND.polices) {
+    const l = document.createElement('link');
     l.rel = 'stylesheet'; l.href = BRAND.polices;
     document.head.appendChild(l);
   }
