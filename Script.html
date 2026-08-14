@@ -1543,7 +1543,9 @@ function bindSimple(){
 
   document.getElementById('sRows').addEventListener('input', debounce(function(e){
     if (e.target.classList.contains('sv') && e.target.tagName === 'INPUT'){
-      var i = +e.target.closest('.srow').dataset.i;
+      var row = e.target.closest('.srow'); if (!row) return;
+      var i = +row.dataset.i;
+      if (!S.filters[i]) return;
       S.filters[i].val = e.target.value;
       S.simpleShown = 25;
       applyQuery();
@@ -1686,25 +1688,31 @@ function applyView(name){
 }
 
 /* ==========================================================================
- *  TUILES KPI (mode simple) — mêmes chemins que le moteur de filtres
+ *  TUILES KPI (mode simple) — calculées directement via le moteur testOne(f)
+ *  Garantit une cohérence mathématique et structurelle absolue (compteur = résultat).
  * ======================================================================== */
 var KPIS = [
-  { k:'kpiTotal',     alert:false, test:function(f){ return true; }, f:[] },
-  { k:'kpiSans2sv',   alert:true,  test:function(f){ return (f['isEnrolledIn2Sv'] || [])[0] === false && (f['suspended'] || [])[0] !== true; },
-                      f:[['isEnrolledIn2Sv','eq','false'],['suspended','eq','false']] },
-  { k:'kpiAdmins',    alert:false, test:function(f){ return (f['calc.estAdmin'] || [])[0] === true; }, f:[['calc.estAdmin','eq','true']] },
-  { k:'kpiJamais',    alert:false, test:function(f){ return (f['calc.jamaisConnecte'] || [])[0] === true && (f['suspended'] || [])[0] !== true; },
-                      f:[['calc.jamaisConnecte','eq','true'],['suspended','eq','false']] },
-  { k:'kpiSuspendus', alert:false, test:function(f){ return (f['suspended'] || [])[0] === true; }, f:[['suspended','eq','true']] },
-  { k:'kpiAlertes',   alert:true,  test:function(f){ return ((f['calc.nbAlertes'] || [])[0] || 0) >= 1; }, f:[['calc.nbAlertes','gte','1']] }
+  { k:'kpiTotal',     alert:false, f:[] },
+  { k:'kpiSans2sv',   alert:true,  f:[['isEnrolledIn2Sv','eq','false'],['suspended','eq','false']] },
+  { k:'kpiAdmins',    alert:false, f:[['calc.estAdmin','eq','true']] },
+  { k:'kpiJamais',    alert:false, f:[['calc.jamaisConnecte','eq','true'],['suspended','eq','false']] },
+  { k:'kpiSuspendus', alert:false, f:[['suspended','eq','true']] },
+  { k:'kpiAlertes',   alert:true,  f:[['calc.nbAlertes','gte','1']] }
 ];
 
 function renderKpis(){
   var box = document.getElementById('kpis');
   if (!box) return;
   box.innerHTML = KPIS.map(function(k, i){
+    var filters = (k.f || []).map(function(f){
+      return { path: resolvePath(f[0]), op: f[1], val: f[2] };
+    });
     var v = 0;
-    S.rows.forEach(function(r){ if (k.test(r.f)) v++; });
+    S.rows.forEach(function(r){
+      if (!filters.length) { v++; return; }
+      var match = filters.every(function(flt){ return testOne(r, flt); });
+      if (match) v++;
+    });
     return '<button class="kpi' + (k.alert && v > 0 ? ' alert' : '') + '" data-kpi="' + i + '">'
          + '<b>' + nb(v) + '</b><span>' + esc(T(k.k).replace('{s}', v > 1 ? 's' : '')) + '</span></button>';
   }).join('');
@@ -2368,6 +2376,7 @@ document.addEventListener('DOMContentLoaded', function(){
   document.getElementById('filters').addEventListener('input', debounce(function(e){
     var row = e.target.closest('.frow'); if (!row) return;
     var i = +row.dataset.i;
+    if (!S.filters[i]) return;
     if (e.target.classList.contains('fpath')){
       S.filters[i].path = e.target.value.trim();
       updateHint(i);
@@ -2381,8 +2390,10 @@ document.addEventListener('DOMContentLoaded', function(){
 
   document.getElementById('filters').addEventListener('change', function(e){
     var row = e.target.closest('.frow'); if (!row) return;
+    var i = +row.dataset.i;
+    if (!S.filters[i]) return;
     if (e.target.classList.contains('fop')){
-      S.filters[+row.dataset.i].op = e.target.value;
+      S.filters[i].op = e.target.value;
       applyQuery();
     }
   });
@@ -2475,7 +2486,11 @@ document.addEventListener('DOMContentLoaded', function(){
   document.getElementById('btnRefresh').addEventListener('click', function(){ load(true); });
 
   document.getElementById('ouFilter').addEventListener('change', function(){ load(false); });
-  document.getElementById('showDeleted').addEventListener('change', function(){ load(false); });
+  document.getElementById('showDeleted').addEventListener('change', function(){
+    var ouEl = document.getElementById('ouFilter');
+    if (ouEl) ouEl.disabled = this.checked;
+    load(false);
+  });
   document.getElementById('viewsSel').addEventListener('change', function(){ if (this.value) applyView(this.value); });
   document.getElementById('viewSave').addEventListener('click', saveCurrentView);
   document.getElementById('viewDel').addEventListener('click', deleteCurrentView);

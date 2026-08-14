@@ -77,7 +77,9 @@ function doGet(e) {
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
-function include(name) {
+function include_(name) {
+  var whitelist = ['Stylesheet', 'Script'];
+  if (whitelist.indexOf(name) === -1) return '';
   return HtmlService.createHtmlOutputFromFile(name).getContent();
 }
 
@@ -86,8 +88,12 @@ function include(name) {
  * ======================================================================== */
 
 function currentUser_() {
-  try { return (Session.getActiveUser().getEmail() || '').toLowerCase(); }
-  catch (err) { return ''; }
+  var email = '';
+  try { email = (Session.getActiveUser().getEmail() || '').toLowerCase(); } catch (err) {}
+  if (!email) {
+    try { email = (Session.getEffectiveUser().getEmail() || '').toLowerCase(); } catch (err) {}
+  }
+  return email;
 }
 
 function checkAccess_() {
@@ -159,58 +165,69 @@ function apiBootstrap() {
 
 /**
  * Charge UNE tranche de l'annuaire (CFG.BATCH_SIZE comptes) et rend la main.
- * Le client rappelle la fonction avec nextPageToken jusqu'à épuisement :
- * on évite ainsi une réponse unique de plusieurs dizaines de Mo, on reste
- * loin des 6 minutes d'exécution, et le cache reste découpé en morceaux
- * digestes pour CacheService.
- *
- * @param {Object} opts {pageToken:string, force:boolean, query:string,
- *                       orgUnitPath:string, showDeleted:boolean, loaded:number}
  */
-function apiLoadBatch(opts) {
-  opts = opts || {};
-  var t0 = new Date().getTime();
+function apiLoadBatch(payload) {
   var acc = checkAccess_();
   if (!acc.allowed) {
-    return { ok: false, errorCode: 'accesRefuse', user: acc.email, reason: acc.reason,
-             error: 'Accès refusé pour ' + (acc.email || 'compte inconnu') + '. ' + acc.reason };
+    return { ok: false, errorCode: 'accesRefuse', user: acc.email, reason: acc.reason };
   }
 
-  var first = !opts.pageToken;
-  var loaded = opts.loaded || 0;
+  payload = payload || {};
+  var token = payload.pageToken || '';
+  var loaded = payload.loadedCount || payload.loaded || 0;
+  var force = !!payload.force;
+  var first = (loaded === 0 && !token);
+  var opts = {
+    query: payload.query || '',
+    orgUnitPath: (payload.orgUnit || payload.orgUnitPath || '').trim(),
+    showDeleted: !!payload.showDeleted
+  };
+
   var key = CFG.CACHE_PREFIX + 'B_' + hash_(JSON.stringify({
-    t: opts.pageToken || 'first', q: opts.query || '',
+    t: token || 'first', q: opts.query || '',
     ou: opts.orgUnitPath || '', d: !!opts.showDeleted, l: loaded
   }));
 
-  if (!opts.force) {
+  if (!force) {
     var hit = cacheGet_(key);
     if (hit) {
       hit.cached = true;
-      hit.elapsed = new Date().getTime() - t0;
       return hit;
     }
   }
 
-  var users = [], token = opts.pageToken || null, source = 'api', warning = '', warningCode = '';
+  var users = [];
+  var source = 'api';
+  var warning = '';
+  var warningCode = '';
   var room = Math.max(0, CFG.MAX_USERS - loaded);
+  if (room === 0) {
+    return { ok: true, users: [], nextPageToken: '', source: 'api', schemas: null };
+  }
+  var guard = 0;
 
   try {
-    var guard = 0;
     do {
       var params = {
         customer: CFG.CUSTOMER,
         maxResults: Math.min(CFG.PAGE_SIZE, room - users.length),
         projection: 'full',
-        orderBy: 'email',
         viewType: 'admin_view'
       };
       if (token) params.pageToken = token;
-      var q = [];
-      if (opts.query) q.push(opts.query);
-      if (opts.orgUnitPath) q.push("orgUnitPath='" + opts.orgUnitPath.replace(/'/g, "\\'") + "'");
-      if (q.length) params.query = q.join(' ');
-      if (opts.showDeleted) params.showDeleted = 'true';
+
+      if (opts.showDeleted) {
+        // L'API Admin SDK Directory refuse showDeleted combiné à orderBy ou query
+        params.showDeleted = 'true';
+      } else {
+        params.orderBy = 'email';
+        var q = [];
+        if (opts.query) q.push(opts.query);
+        if (opts.orgUnitPath && opts.orgUnitPath !== '/') {
+          q.push("orgUnitPath='" + opts.orgUnitPath.replace(/'/g, "\\'") + "'");
+        }
+        if (q.length) params.query = q.join(' ');
+      }
 
       var res = AdminDirectory.Users.list(params);
       (res.users || []).forEach(function (u) {
@@ -224,7 +241,7 @@ function apiLoadBatch(opts) {
     users = demoUsers_();
     token = null;
     source = 'demo';
-    warning = err.message;          // le libellé est composé côté client, dans sa langue
+    warning = err.message;
     warningCode = 'demoCharge';
   }
 
