@@ -319,7 +319,8 @@ body.tab-orgchart .side, body.tab-anomalies .side{display:none}
 .org-stats b{color:var(--txt)}
 
 .org-layout{display:flex;gap:16px;align-items:stretch;width:100%}
-.org-main{flex:1 1 0%;min-width:0;overflow:auto;background:var(--gris);border:1px solid var(--bord);border-radius:var(--r);padding:24px;min-height:520px;max-height:calc(100vh - 240px)}
+.org-main{flex:1 1 0%;min-width:0;overflow:auto;background:var(--gris);border:1px solid var(--bord);border-radius:var(--r);padding:28px;min-height:520px;max-height:calc(100vh - 240px);cursor:grab;user-select:none;-webkit-user-select:none}
+.org-main.grabbing{cursor:grabbing;cursor:-webkit-grabbing}
 .org-side{width:340px;flex:0 0 340px;display:flex;flex-direction:column;gap:14px;max-height:calc(100vh - 240px);overflow-y:auto}
 .org-panel{background:#fff;border:1px solid var(--bord);border-radius:var(--r);padding:14px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
 .org-panel-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
@@ -332,6 +333,12 @@ body.tab-orgchart .side, body.tab-anomalies .side{display:none}
 .org-item-info{flex:1;min-width:0}
 .org-item-name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .org-item-sub{font-size:10.5px;color:var(--txt3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* Contrôles de zoom */
+.org-zoom-group{display:inline-flex;align-items:center;border:1px solid var(--bord);border-radius:var(--r);background:#fff;overflow:hidden}
+.org-zoom-btn{background:transparent;border:none;padding:5px 9px;font-weight:700;font-size:13px;color:var(--txt2);cursor:pointer;line-height:1}
+.org-zoom-btn:hover{background:var(--gris);color:var(--txt)}
+.org-zoom-lvl{padding:4px 7px;font-size:11.5px;font-family:var(--mono);color:var(--txt);border-left:1px solid var(--bord);border-right:1px solid var(--bord);min-width:44px;text-align:center;background:var(--gris)}
 
 /* --- Arbre hiérarchique CSS ------------------------------------------------- */
 .org-tree{display:flex;justify-content:center;padding:10px 0;width:max-content;min-width:100%}

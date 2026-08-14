@@ -1794,9 +1794,17 @@ function isGenericAccount(u){
   var name = ((u.name && u.name.fullName) || '').toLowerCase();
   var ou = String(u.orgUnitPath || '').toLowerCase();
 
-  if (/service|ressource|partag|generiq|techniq|salle|room|bot|device|materiel/i.test(ou)) return true;
-  if (/^(admin|contact|support|info|service|technique|helpdesk|billing|facturation|scanner|noreply|no-reply|api|dev|infra|bot|partage|salle|meeting|room|accueil|rh|recrutement|direction|secretariat|commercial|sales|marketing|compta|comptabilite|alert|alertes|notification|notifications|webhook|root)$/i.test(pfx)) return true;
-  if (/service|compte|salle|room|partagé|scanner|bot|robot|générique|support|contact|équipe|team/i.test(name)) return true;
+  // 1. Unité organisationnelle typique (services, ressources, invités, prestataires)
+  if (/service|ressource|partag|generiq|techniq|salle|room|bot|device|materiel|guest|invit|presta|extern|temp|visit/i.test(ou)) return true;
+
+  // 2. Préfixes d'emails génériques complets, comptes admin dédiés, invités et prestataires
+  if (/^(admin|contact|support|info|service|technique|helpdesk|billing|facturation|scanner|noreply|no-reply|api|dev|infra|bot|partage|salle|meeting|room|accueil|rh|recrutement|direction|secretariat|commercial|sales|marketing|compta|comptabilite|alert|alertes|notification|notifications|webhook|root|superadmin|administrateur|guest|invite|invité|visiteur|visitor|externe|presta|prestataire|temp|stagiaire|consultant)$/i.test(pfx)) return true;
+
+  // 3. Modèles avec séparateurs : admin.xxx, xxx.admin, adm-xxx, guest.xxx, ext-xxx, presta.xxx
+  if (/^(admin|adm|guest|invite|invit|ext|externe|presta|temp)[\.\-_]|[\.\-_](admin|adm|guest|invite|ext|presta|temp)$/i.test(pfx)) return true;
+
+  // 4. Nom complet contenant des mots-clés de comptes non-humains ou invités
+  if (/service|compte|salle|room|partagé|scanner|bot|robot|générique|support|contact|équipe|team|guest|invité|visiteur|prestataire|externe/i.test(name)) return true;
 
   return false;
 }
@@ -1864,7 +1872,8 @@ function buildOrgTree(){
 var S_org = {
   search: '',
   hideGeneric: false,
-  collapsed: {}
+  collapsed: {},
+  zoom: 1
 };
 
 function renderOrgChart(){
@@ -1920,7 +1929,7 @@ function renderOrgChart(){
   if (!roots.length){
     treeHtml = '<div class="hint" style="padding:40px;text-align:center;">' + esc(T('orgAucunArbre')) + '</div>';
   } else {
-    treeHtml = '<div class="org-tree"><ul>' + roots.map(renderCard).join('') + '</ul></div>';
+    treeHtml = '<div class="org-tree" id="orgTreeEl" style="transform:scale(' + S_org.zoom + ');"><ul>' + roots.map(renderCard).join('') + '</ul></div>';
   }
 
   var sideNonRattaches = nonRattaches.filter(function(r){
@@ -1953,11 +1962,17 @@ function renderOrgChart(){
     + '<input type="text" class="org-search" id="orgSearchInput" placeholder="' + esc(T('orgRechercher')) + '" value="' + esc(S_org.search) + '">'
     + '<button class="btn" id="btnOrgExpandAll">' + esc(T('orgDeployerTout')) + '</button>'
     + '<button class="btn" id="btnOrgCollapseAll">' + esc(T('orgReplierTout')) + '</button>'
+    + '<div class="org-zoom-group">'
+    + '<button class="org-zoom-btn" id="btnOrgZoomOut" title="Zoom −">−</button>'
+    + '<span class="org-zoom-lvl" id="orgZoomLvl">' + Math.round(S_org.zoom * 100) + '%</span>'
+    + '<button class="org-zoom-btn" id="btnOrgZoomIn" title="Zoom +">+</button>'
+    + '<button class="org-zoom-btn" id="btnOrgZoomReset" title="100%">1:1</button>'
+    + '</div>'
     + '<div class="grow"></div>'
     + '<label class="tchk"><input type="checkbox" id="orgHideGen" ' + (S_org.hideGeneric ? 'checked' : '') + '> ' + esc(T('orgMasquerTech')) + '</label>'
     + '</div>'
     + '<div class="org-layout">'
-    + '<div class="org-main">' + treeHtml + '</div>'
+    + '<div class="org-main" id="orgMainEl">' + treeHtml + '</div>'
     + '<div class="org-side">'
     + '<div class="org-panel">'
     + '<div class="org-panel-h"><strong>' + esc(T('orgSansMgr')) + '</strong><span class="tag f">' + nonRattaches.length + '</span></div>'
@@ -2003,6 +2018,50 @@ function renderOrgChart(){
     collAll.addEventListener('click', function(){
       Object.keys(children).forEach(function(m){ S_org.collapsed[m] = true; });
       renderOrgChart();
+    });
+  }
+
+  function setZoom(val){
+    S_org.zoom = Math.max(0.3, Math.min(1.8, Math.round(val * 100) / 100));
+    var tree = document.getElementById('orgTreeEl');
+    if (tree) tree.style.transform = 'scale(' + S_org.zoom + ')';
+    var lvl = document.getElementById('orgZoomLvl');
+    if (lvl) lvl.textContent = Math.round(S_org.zoom * 100) + '%';
+  }
+
+  var zIn = document.getElementById('btnOrgZoomIn');
+  if (zIn) zIn.addEventListener('click', function(){ setZoom(S_org.zoom + 0.15); });
+
+  var zOut = document.getElementById('btnOrgZoomOut');
+  if (zOut) zOut.addEventListener('click', function(){ setZoom(S_org.zoom - 0.15); });
+
+  var zRst = document.getElementById('btnOrgZoomReset');
+  if (zRst) zRst.addEventListener('click', function(){ setZoom(1); });
+
+  // Panoramique par glisser-déposer (Drag to pan)
+  var mainEl = document.getElementById('orgMainEl');
+  if (mainEl){
+    var isDown = false, startX, startY, sLeft, sTop;
+    mainEl.addEventListener('mousedown', function(e){
+      if (e.target.closest('.org-card-toggle') || e.target.closest('button') || e.target.closest('input')) return;
+      isDown = true;
+      mainEl.classList.add('grabbing');
+      startX = e.pageX - mainEl.offsetLeft;
+      startY = e.pageY - mainEl.offsetTop;
+      sLeft = mainEl.scrollLeft;
+      sTop = mainEl.scrollTop;
+    });
+    window.addEventListener('mouseup', function(){
+      isDown = false;
+      if (mainEl) mainEl.classList.remove('grabbing');
+    });
+    mainEl.addEventListener('mousemove', function(e){
+      if (!isDown) return;
+      e.preventDefault();
+      var x = e.pageX - mainEl.offsetLeft;
+      var y = e.pageY - mainEl.offsetTop;
+      mainEl.scrollLeft = sLeft - (x - startX);
+      mainEl.scrollTop = sTop - (y - startY);
     });
   }
 
