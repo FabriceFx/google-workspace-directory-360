@@ -1897,24 +1897,40 @@ function openByEmail(mail){
  *  ORGANIGRAMME DYNAMIQUE (ORG CHART) & GESTION DES COMPTES GÉNÉRIQUES
  * ======================================================================== */
 
+/** Minuscule + suppression des accents, pour des comparaisons stables. */
+function deburr_(s){
+  return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+/* Dernier segment d'OU réservé aux comptes non-humains. Comparaison sur le
+   segment exact (et non une sous-chaîne du chemin) : sans quoi « /Ressources
+   Humaines » ou « /Temps partiel » feraient passer tout le service pour des
+   comptes de service. */
+var OU_GENERIC = {
+  'services':1,'service':1,'salles':1,'salle':1,'materiel':1,'materiels':1,
+  'ressources partagees':1,'comptes de service':1,'comptes generiques':1,
+  'generiques':1,'robots':1,'bots':1,'invites':1,'visiteurs':1,
+  'prestataires':1,'externes':1,'equipements':1,'equipement':1
+};
+
 function isGenericAccount(u){
   if (!u) return false;
-  var mail = String(u.primaryEmail || '').toLowerCase();
-  var pfx = mail.split('@')[0] || '';
-  var name = ((u.name && u.name.fullName) || '').toLowerCase();
-  var ou = String(u.orgUnitPath || '').toLowerCase();
+  var pfx = deburr_(u.primaryEmail).split('@')[0] || '';
+  var name = deburr_((u.name && u.name.fullName) || '');
+  var seg = deburr_(u.orgUnitPath).split('/').filter(Boolean).pop() || '';
 
-  // 1. Unité organisationnelle typique (services, ressources, invités, prestataires)
-  if (/service|ressource|partag|generiq|techniq|salle|room|bot|device|materiel|guest|invit|presta|extern|temp|visit/i.test(ou)) return true;
+  // 1. Dernier segment d'OU dédié aux comptes non-humains (correspondance exacte)
+  if (OU_GENERIC[seg]) return true;
 
-  // 2. Préfixes d'emails génériques complets, comptes admin dédiés, invités et prestataires
-  if (/^(admin|contact|support|info|service|technique|helpdesk|billing|facturation|scanner|noreply|no-reply|api|dev|infra|bot|partage|salle|meeting|room|accueil|rh|recrutement|direction|secretariat|commercial|sales|marketing|compta|comptabilite|alert|alertes|notification|notifications|webhook|root|superadmin|administrateur|guest|invite|invité|visiteur|visitor|externe|presta|prestataire|temp|stagiaire|consultant)$/i.test(pfx)) return true;
+  // 2. Préfixe d'e-mail entièrement générique (boîte de rôle : contact@, rh@…)
+  if (/^(admin|contact|support|info|service|technique|helpdesk|billing|facturation|scanner|noreply|no-reply|api|dev|infra|bot|partage|salle|meeting|room|accueil|rh|recrutement|direction|secretariat|commercial|sales|marketing|compta|comptabilite|alert|alertes|notification|notifications|webhook|root|superadmin|administrateur|guest|invite|visiteur|visitor|externe|presta|prestataire|temp)$/.test(pfx)) return true;
 
-  // 3. Modèles avec séparateurs : admin.xxx, xxx.admin, adm-xxx, guest.xxx, ext-xxx, presta.xxx
-  if (/^(admin|adm|guest|invite|invit|ext|externe|presta|temp)[\.\-_]|[\.\-_](admin|adm|guest|invite|ext|presta|temp)$/i.test(pfx)) return true;
+  // 3. Modèles avec séparateurs : admin.xxx, xxx.admin, ext-xxx, presta.xxx
+  if (/^(admin|adm|guest|invite|invit|ext|externe|presta)[._-]|[._-](admin|adm|guest|invite|ext|presta)$/.test(pfx)) return true;
 
-  // 4. Nom complet contenant des mots-clés de comptes non-humains ou invités
-  if (/service|compte|salle|room|partagé|scanner|bot|robot|générique|support|contact|équipe|team|guest|invité|visiteur|prestataire|externe/i.test(name)) return true;
+  // 4. Nom complet contenant un mot-clé non-humain (mot entier, pour éviter de
+  //    capturer un patronyme qui contiendrait la sous-chaîne).
+  if (/\b(service|salle|room|scanner|bot|robot|generique|equipe|team|prestataire)\b/.test(name)) return true;
 
   return false;
 }
@@ -1927,48 +1943,60 @@ function buildOrgTree(){
   var nonRattaches = [];
   var genericAccounts = [];
 
+  var isGen = {};
   S.rows.forEach(function(r){
-    var u = r.u;
-    var mail = String(u.primaryEmail || '').toLowerCase();
+    var mail = String(r.u.primaryEmail || '').toLowerCase();
     userMap[mail] = r;
+    if (isGenericAccount(r.u)) isGen[mail] = true;
   });
 
+  // Rattachement d'un compte à son manager, UNIQUEMENT si ce manager existe
+  // dans le parc, n'est pas lui-même (auto-manager = erreur de saisie) et n'est
+  // pas un compte générique — sans quoi les reports d'un compte de rôle
+  // (direction@) deviendraient orphelins et disparaîtraient de l'arbre.
   S.rows.forEach(function(r){
     var u = r.u;
     var mail = String(u.primaryEmail || '').toLowerCase();
-    if (isGenericAccount(u)){
-      genericAccounts.push(r);
-      return;
-    }
+    if (isGen[mail]){ genericAccounts.push(r); return; }
     var mgrRel = (u.relations || []).filter(function(rel){ return rel.type === 'manager' && rel.value; })[0];
     var mgrMail = mgrRel ? String(mgrRel.value).toLowerCase() : '';
-
-    if (mgrMail && userMap[mgrMail]){
+    if (mgrMail && mgrMail !== mail && userMap[mgrMail] && !isGen[mgrMail]){
       (children[mgrMail] = children[mgrMail] || []).push(mail);
       managerOf[mail] = mgrMail;
     }
   });
 
+  // Racines = comptes non génériques sans manager rattaché ; les feuilles
+  // sans manager tombent dans « sans manager ».
   S.rows.forEach(function(r){
-    var u = r.u;
-    var mail = String(u.primaryEmail || '').toLowerCase();
-    if (isGenericAccount(u)) return;
-
-    var mgrMail = managerOf[mail];
-    var hasChildren = children[mail] && children[mail].length > 0;
-
-    if (!mgrMail){
-      if (hasChildren){
-        roots.push(mail);
-      } else {
-        nonRattaches.push(r);
-      }
-    }
+    var mail = String(r.u.primaryEmail || '').toLowerCase();
+    if (isGen[mail] || managerOf[mail]) return;
+    if (children[mail] && children[mail].length) roots.push(mail);
+    else nonRattaches.push(r);
   });
 
-  if (!roots.length && Object.keys(children).length){
-    roots = Object.keys(children);
+  // Filet anti-cycle : on marque tout ce qui est atteignable depuis les racines
+  // (le parcours coupe sur un nœud déjà vu), puis on promeut en racine tout
+  // manager jamais atteint — c'est-à-dire pris dans une boucle fermée A→B→A.
+  var seen = {};
+  var stack = roots.slice();
+  while (stack.length){
+    var m = stack.pop();
+    if (seen[m]) continue;
+    seen[m] = true;
+    (children[m] || []).forEach(function(c){ if (!seen[c]) stack.push(c); });
   }
+  Object.keys(children).forEach(function(mgr){
+    if (isGen[mgr] || seen[mgr]) return;
+    roots.push(mgr);
+    var st = [mgr];
+    while (st.length){
+      var x = st.pop();
+      if (seen[x]) continue;
+      seen[x] = true;
+      (children[x] || []).forEach(function(c){ if (!seen[c]) st.push(c); });
+    }
+  });
 
   return {
     userMap: userMap,
@@ -1986,6 +2014,30 @@ var S_org = {
   zoom: 1,
   rootFocus: ''
 };
+
+/* État du panoramique + écouteur mouseup global attaché une seule fois pour tout
+   le cycle de vie de la page (voir renderOrgChart). */
+var orgDrag = { down: false, el: null, startX: 0, startY: 0, sLeft: 0, sTop: 0 };
+var orgMouseupBound = false;
+function orgBindGlobalMouseup_(){
+  if (orgMouseupBound) return;
+  orgMouseupBound = true;
+  window.addEventListener('mouseup', function(){
+    orgDrag.down = false;
+    if (orgDrag.el) orgDrag.el.classList.remove('grabbing');
+  });
+}
+
+/* Recherche debouncée : restaure la position du curseur passée en argument. */
+var orgSearchDebounced = debounce(function(caret){
+  renderOrgChart();
+  var el = document.getElementById('orgSearchInput');
+  if (el){
+    el.focus();
+    try { el.selectionStart = el.selectionEnd = (caret == null ? el.value.length : caret); }
+    catch (e) { /* certains navigateurs refusent selectionStart sur input search */ }
+  }
+}, 200);
 
 function renderOrgChart(){
   var v = document.getElementById('viewOrgchart');
@@ -2012,9 +2064,12 @@ function renderOrgChart(){
     return { mail: m, name: name, count: (children[m] || []).length };
   }).sort(function(a, b){ return a.name.localeCompare(b.name, LOC()); });
 
-  function renderCard(mail){
+  // `seen` partagé sur tout le rendu : chaque compte n'est dessiné qu'une fois,
+  // et un rattachement cyclique (A→B→A) est coupé au lieu de boucler à l'infini.
+  function renderCard(mail, seen){
     var r = userMap[mail];
-    if (!r) return '';
+    if (!r || seen[mail]) return '';
+    seen[mail] = true;
     var u = r.u;
     var ch = children[mail] || [];
     var isColl = !!S_org.collapsed[mail];
@@ -2047,7 +2102,7 @@ function renderOrgChart(){
     if (ch.length){
       html += '<ul>';
       ch.forEach(function(cMail){
-        html += renderCard(cMail);
+        html += renderCard(cMail, seen);
       });
       html += '</ul>';
     }
@@ -2070,7 +2125,9 @@ function renderOrgChart(){
   if (!roots.length){
     treeHtml += '<div class="hint" style="padding:40px;text-align:center;">' + esc(T('orgAucunArbre')) + '</div>';
   } else {
-    treeHtml += '<div class="org-tree" id="orgTreeEl" style="transform:scale(' + S_org.zoom + ');"><ul>' + roots.map(renderCard).join('') + '</ul></div>';
+    var rendered = {};
+    treeHtml += '<div class="org-tree" id="orgTreeEl" style="transform:scale(' + S_org.zoom + ');"><ul>'
+      + roots.map(function(m){ return renderCard(m, rendered); }).join('') + '</ul></div>';
   }
 
   var sideNonRattaches = nonRattaches.filter(function(r){
@@ -2156,11 +2213,12 @@ function renderOrgChart(){
 
   var searchInput = document.getElementById('orgSearchInput');
   if (searchInput){
+    // Debounce : sur 9 000 comptes, reconstruire l'arbre à chaque frappe gèle
+    // l'UI. On mémorise aussi la position du curseur pour la restaurer après le
+    // re-rendu (l'input est recréé), au lieu de la forcer en fin de champ.
     searchInput.addEventListener('input', function(){
       S_org.search = this.value;
-      renderOrgChart();
-      var el = document.getElementById('orgSearchInput');
-      if (el){ el.focus(); el.selectionStart = el.selectionEnd = el.value.length; }
+      orgSearchDebounced(this.selectionStart);
     });
   }
 
@@ -2205,30 +2263,27 @@ function renderOrgChart(){
   var zRst = document.getElementById('btnOrgZoomReset');
   if (zRst) zRst.addEventListener('click', function(){ setZoom(1); });
 
-  // Panoramique par glisser-déposer (Drag to pan)
+  // Panoramique par glisser-déposer. mainEl est recréé à chaque rendu (ses
+  // écouteurs disparaissent avec lui), mais le mouseup vit sur window : il ne
+  // doit être attaché qu'UNE fois, sinon les handlers s'empilent à chaque rendu.
   var mainEl = document.getElementById('orgMainEl');
   if (mainEl){
-    var isDown = false, startX, startY, sLeft, sTop;
+    orgBindGlobalMouseup_();
     mainEl.addEventListener('mousedown', function(e){
-      if (e.target.closest('.org-card-toggle') || e.target.closest('.org-card-focus') || e.target.closest('button') || e.target.closest('input') || e.target.closest('select')) return;
-      isDown = true;
+      if (e.target.closest('button') || e.target.closest('input') || e.target.closest('select')) return;
+      orgDrag.down = true;
+      orgDrag.el = mainEl;
       mainEl.classList.add('grabbing');
-      startX = e.pageX - mainEl.offsetLeft;
-      startY = e.pageY - mainEl.offsetTop;
-      sLeft = mainEl.scrollLeft;
-      sTop = mainEl.scrollTop;
-    });
-    window.addEventListener('mouseup', function(){
-      isDown = false;
-      if (mainEl) mainEl.classList.remove('grabbing');
+      orgDrag.startX = e.pageX - mainEl.offsetLeft;
+      orgDrag.startY = e.pageY - mainEl.offsetTop;
+      orgDrag.sLeft = mainEl.scrollLeft;
+      orgDrag.sTop = mainEl.scrollTop;
     });
     mainEl.addEventListener('mousemove', function(e){
-      if (!isDown) return;
+      if (!orgDrag.down) return;
       e.preventDefault();
-      var x = e.pageX - mainEl.offsetLeft;
-      var y = e.pageY - mainEl.offsetTop;
-      mainEl.scrollLeft = sLeft - (x - startX);
-      mainEl.scrollTop = sTop - (y - startY);
+      mainEl.scrollLeft = orgDrag.sLeft - ((e.pageX - mainEl.offsetLeft) - orgDrag.startX);
+      mainEl.scrollTop = orgDrag.sTop - ((e.pageY - mainEl.offsetTop) - orgDrag.startY);
     });
   }
 
