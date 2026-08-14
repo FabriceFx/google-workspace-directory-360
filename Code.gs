@@ -590,8 +590,12 @@ function reportRecipients_() {
 }
 
 function reportDaily() {
-  var acc = checkAccess_();
-  if (!acc.allowed) return;
+  // Dans le contexte d'un déclencheur planifié automatique (Time-driven trigger),
+  // Session.getActiveUser() est vide. L'autorisation et l'envoi reposent sur
+  // le compte effectif (propriétaire/installateur ayant configuré le déclencheur).
+  var triggerEmail = '';
+  try { triggerEmail = (Session.getEffectiveUser().getEmail() || '').toLowerCase(); } catch (err) { triggerEmail = ''; }
+  if (!triggerEmail) return;
 
   var users;
   try { users = fetchAllUsers_({}); } catch (err) { return; }
