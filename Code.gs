@@ -88,46 +88,49 @@ function include_(name) {
  * ======================================================================== */
 
 function currentUser_() {
-  var email = '';
-  try { email = (Session.getActiveUser().getEmail() || '').toLowerCase(); } catch (err) {}
-  if (!email) {
-    try { email = (Session.getEffectiveUser().getEmail() || '').toLowerCase(); } catch (err) {}
-  }
-  return email;
+  var active = '';
+  try { active = (Session.getActiveUser().getEmail() || '').toLowerCase().trim(); } catch (err) {}
+  var effective = '';
+  try { effective = (Session.getEffectiveUser().getEmail() || '').toLowerCase().trim(); } catch (err) {}
+  return active || effective || '';
 }
 
 function checkAccess_() {
-  var email = currentUser_();
+  var activeEmail = '';
+  try { activeEmail = (Session.getActiveUser().getEmail() || '').toLowerCase().trim(); } catch (err) {}
+  var effectiveEmail = '';
+  try { effectiveEmail = (Session.getEffectiveUser().getEmail() || '').toLowerCase().trim(); } catch (err) {}
+  
+  var email = activeEmail || effectiveEmail || '';
   var allowed = false;
-  var reason = 'Accès refusé par défaut.';
+  var reason = '';
 
-  var hasEmailRule = CFG.ALLOWED_EMAILS && CFG.ALLOWED_EMAILS.length > 0;
-  var hasGroupRule = !!CFG.ALLOWED_GROUP;
+  var allowedList = (CFG.ALLOWED_EMAILS || []).map(function(x){ return String(x).toLowerCase().trim(); }).filter(Boolean);
+  var hasEmailRule = allowedList.length > 0;
+  var hasGroupRule = !!(CFG.ALLOWED_GROUP && String(CFG.ALLOWED_GROUP).trim());
 
   if (!hasEmailRule && !hasGroupRule) {
     allowed = false;
-    reason = "Application non configurée (aucune règle d'accès définie).";
+    reason = "Application non configurée (aucune règle d'accès dans ALLOWED_EMAILS ni ALLOWED_GROUP).";
   } else {
     var inList = false;
     if (hasEmailRule) {
-      inList = CFG.ALLOWED_EMAILS
-        .map(function(x){ return String(x).toLowerCase(); })
-        .indexOf(email) !== -1;
+      inList = (activeEmail && allowedList.indexOf(activeEmail) !== -1) ||
+               (effectiveEmail && allowedList.indexOf(effectiveEmail) !== -1);
     }
     var inGroup = false;
-    if (hasGroupRule) {
+    if (hasGroupRule && (activeEmail || effectiveEmail)) {
       try {
-        inGroup = AdminDirectory.Members.hasMember(CFG.ALLOWED_GROUP, email).isMember === true;
+        var checkMail = activeEmail || effectiveEmail;
+        inGroup = AdminDirectory.Members.hasMember(CFG.ALLOWED_GROUP, checkMail).isMember === true;
       } catch (err) {
         reason = 'Vérification du groupe impossible : ' + err.message;
       }
     }
     
     allowed = inList || inGroup;
-    if (!allowed && reason.indexOf('Vérification') === -1) {
-      reason = "Compte non autorisé par les règles d'accès.";
-    } else if (allowed) {
-      reason = '';
+    if (!allowed && !reason) {
+      reason = "Compte détecté : " + (activeEmail || effectiveEmail || 'inconnu (Session vide)') + " — non présent dans ALLOWED_EMAILS [" + allowedList.join(', ') + "]" + (hasGroupRule ? (" ni membre du groupe " + CFG.ALLOWED_GROUP) : "");
     }
   }
 
