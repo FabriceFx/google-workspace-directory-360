@@ -75,6 +75,11 @@ var I18N = {
   orgIsolerBranche:  ['Isoler cette branche managériale', 'Focus on this management branch'],
   orgVoirTout:       ['Afficher toute l\'organisation', 'Show entire organization'],
   orgRacineActive:   ['Branche active : ', 'Active branch: '],
+  sauvegarderVue:    ['Sauvegarder la vue', 'Save view'],
+  nomVueDesc:        ['Donnez un nom à cette vue pour retrouver facilement vos filtres et colonnes :', 'Name this view to easily retrieve your filters and columns:'],
+  annuler:           ['Annuler', 'Cancel'],
+  sauvegarder:       ['Sauvegarder', 'Save'],
+  nomRequis:         ['Veuillez saisir un nom de vue.', 'Please enter a view name.'],
   // barre supérieure
   aPropos:           ['À propos', 'About'],
   recharger:         ['↻ Recharger', '↻ Reload'],
@@ -401,14 +406,16 @@ function derive(u, add){
   var ll = u.lastLoginTime, t = ll ? Date.parse(ll) : NaN;
   var jamais = !ll || String(ll).indexOf('1970') === 0 || isNaN(t);
   put('jamaisConnecte', jamais);
-  if (jamais){ alertes.push('jamais connecté'); }
-  else {
-    var j = Math.floor((now - t) / 86400000);
-    put('joursDepuisConnexion', j);
-    put('anneeDerniereConnexion', String(ll).substring(0, 4));
-    if (j > 365) alertes.push('inactif +365j');
-    else if (j > 180) alertes.push('inactif +180j');
-    else if (j > 90) alertes.push('inactif +90j');
+  if (!u.suspended){
+    if (jamais){ alertes.push('jamais connecté'); }
+    else {
+      var j = Math.floor((now - t) / 86400000);
+      put('joursDepuisConnexion', j);
+      put('anneeDerniereConnexion', String(ll).substring(0, 4));
+      if (j > 365) alertes.push('inactif +365j');
+      else if (j > 180) alertes.push('inactif +180j');
+      else if (j > 90) alertes.push('inactif +90j');
+    }
   }
 
   // --- Ancienneté ---
@@ -572,6 +579,7 @@ function vals(row, path){ return row.f[path] || []; }
  *  MOTEUR DE FILTRES
  * ======================================================================== */
 function testOne(row, flt){
+  if (!flt || !flt.path) return true;
   var vs = vals(row, flt.path);
   var op = flt.op, needle = String(flt.val == null ? '' : flt.val);
   var nl = needle.toLowerCase(), nn = squash(nl);
@@ -1475,6 +1483,7 @@ function setLang(lg){
 
 function switchMode(m){
   S.mode = m;
+  document.getElementById('banners').innerHTML = '';
   document.body.classList.toggle('simple', m === 'simple');
   document.querySelectorAll('.ms').forEach(function(b){ b.classList.toggle('on', b.dataset.mode === m); });
   if (m === 'simple'){
@@ -1635,18 +1644,17 @@ function persistViews(){
 }
 
 function saveCurrentView(){
-  var name = (window.prompt(T('nomVue')) || '').trim();
-  if (!name) return;
-  S.views[name] = {
-    mode: S.mode, logic: S.logic, search: S.search,
-    sort: { path: S.sort.path, dir: S.sort.dir },
-    filters: S.filters.map(function(f){ return { path: f.path, op: f.op, val: f.val }; }),
-    cols: S.cols.slice(), simpleCols: (S.simpleCols || []).slice()
-  };
-  persistViews();
-  renderViewsMenu();
-  document.getElementById('viewsSel').value = name;
-  toast(T('vueEnregistree').replace('{v}', name));
+  var modal = document.getElementById('modalSaveView');
+  var input = document.getElementById('viewNameInput');
+  if (!modal || !input) return;
+  input.value = '';
+  modal.classList.add('on');
+  input.focus();
+}
+
+function closeSaveViewModal(){
+  var modal = document.getElementById('modalSaveView');
+  if (modal) modal.classList.remove('on');
 }
 
 function deleteCurrentView(){
@@ -1685,7 +1693,8 @@ var KPIS = [
   { k:'kpiSans2sv',   alert:true,  test:function(f){ return (f['isEnrolledIn2Sv'] || [])[0] === false && (f['suspended'] || [])[0] !== true; },
                       f:[['isEnrolledIn2Sv','eq','false'],['suspended','eq','false']] },
   { k:'kpiAdmins',    alert:false, test:function(f){ return (f['calc.estAdmin'] || [])[0] === true; }, f:[['calc.estAdmin','eq','true']] },
-  { k:'kpiJamais',    alert:false, test:function(f){ return (f['calc.jamaisConnecte'] || [])[0] === true; }, f:[['calc.jamaisConnecte','eq','true']] },
+  { k:'kpiJamais',    alert:false, test:function(f){ return (f['calc.jamaisConnecte'] || [])[0] === true && (f['suspended'] || [])[0] !== true; },
+                      f:[['calc.jamaisConnecte','eq','true'],['suspended','eq','false']] },
   { k:'kpiSuspendus', alert:false, test:function(f){ return (f['suspended'] || [])[0] === true; }, f:[['suspended','eq','true']] },
   { k:'kpiAlertes',   alert:true,  test:function(f){ return ((f['calc.nbAlertes'] || [])[0] || 0) >= 1; }, f:[['calc.nbAlertes','gte','1']] }
 ];
@@ -2183,36 +2192,34 @@ function renderUsageLog(){
 function load(force){
   var box = document.getElementById('loader');
   box.classList.remove('off');
+  S.loadSeq = (S.loadSeq || 0) + 1;
+  var seq = S.loadSeq;
   S.raw = []; S.rows = []; S.catalog = []; S.byPath = {}; S.schemas = []; S.legacyTried = false; S.t0 = Date.now(); S.batches = 0; S.cachedAll = true;
   S.anomalies = null;
   S.orgUnit = document.getElementById('ouFilter').value || '';
   S.showDeleted = document.getElementById('showDeleted').checked;
   document.getElementById('banners').innerHTML = '';
   setProgress(0, force ? T('rechargementApi') : T('connexion'));
-  nextBatch('', !!force);
+  nextBatch('', !!force, seq);
 }
 
-function nextBatch(token, force){
+function nextBatch(token, force, seq){
   google.script.run
-    .withSuccessHandler(function(res){ onBatch(res, force); })
-    .withFailureHandler(function(e){ onBatchFail(e, force); })
-    .apiLoadBatch({ pageToken: token, force: force, loaded: S.raw.length,
-                    orgUnitPath: S.orgUnit, showDeleted: S.showDeleted });
+    .withSuccessHandler(function(res){ onBatch(res, force, seq); })
+    .withFailureHandler(function(e){ onBatchFail(e, force, seq); })
+    .apiLoadBatch({ pageToken: token, force: force, loadedCount: S.raw.length,
+                    orgUnit: S.orgUnit, showDeleted: S.showDeleted });
 }
 
-/**
- * Si le déploiement en service est antérieur à l'ajout de apiLoadBatch,
- * on bascule sur apiLoadUsers (chargement en une seule réponse) plutôt que
- * d'échouer. Le message reste explicite : c'est bien une version à republier.
- */
-function onBatchFail(err, force){
+function onBatchFail(err, force, seq){
+  if (seq !== S.loadSeq) return;
   var msg = (err && err.message) ? err.message : String(err);
   if (/introuvable|not found|not a function/i.test(msg) && !S.legacyTried){
     S.legacyTried = true;
     banner('warn', T('deploiementAncien'));
     setProgress(0.15, T('chargementCompat'));
     google.script.run
-      .withSuccessHandler(onLegacy)
+      .withSuccessHandler(function(res){ onLegacy(res, seq); })
       .withFailureHandler(onFail)
       .apiLoadUsers({ force: !!force });
     return;
@@ -2220,7 +2227,8 @@ function onBatchFail(err, force){
   onFail(err);
 }
 
-function onLegacy(res){
+function onLegacy(res, seq){
+  if (seq && seq !== S.loadSeq) return;
   if (!res || !res.ok){ onFail({ message: srvMsg(res) }); return; }
   S.source = res.source;
   S.schemas = res.schemas || [];
@@ -2229,6 +2237,7 @@ function onLegacy(res){
   S.batches = 1;
   S.cachedAll = !!res.cached;
   S.raw = res.users || [];
+  S.anomalies = null;
   setProgress(0.6, T('comptesIndexes').replace('{n}', nb(S.raw.length)));
   setTimeout(function(){
     indexRows(S.raw);
@@ -2237,7 +2246,9 @@ function onLegacy(res){
   }, 30);
 }
 
-function onBatch(res, force){
+function onBatch(res, force, seq){
+  if (seq !== S.loadSeq) return;
+  S.anomalies = null;
   if (!res || !res.ok){
     banner('err', srvMsg(res));
     if (S.raw && S.raw.length > 0) {
@@ -2489,6 +2500,45 @@ document.addEventListener('DOMContentLoaded', function(){
   document.getElementById('modalAbout').addEventListener('click', function(e){
     if (e.target === this) this.classList.remove('on');
   });
+
+  // Modale de sauvegarde de vue
+  var btnSaveCancel = document.getElementById('btnSaveViewCancel');
+  if (btnSaveCancel) btnSaveCancel.addEventListener('click', closeSaveViewModal);
+
+  var btnSaveConfirm = document.getElementById('btnSaveViewConfirm');
+  if (btnSaveConfirm){
+    btnSaveConfirm.addEventListener('click', function(){
+      var input = document.getElementById('viewNameInput');
+      var name = (input.value || '').trim();
+      if (!name){ toast(T('nomRequis')); return; }
+      S.views[name] = {
+        mode: S.mode, logic: S.logic, search: S.search,
+        sort: { path: S.sort.path, dir: S.sort.dir },
+        filters: S.filters.map(function(f){ return { path: f.path, op: f.op, val: f.val }; }),
+        cols: S.cols.slice(), simpleCols: (S.simpleCols || []).slice()
+      };
+      persistViews();
+      renderViewsMenu();
+      document.getElementById('viewsSel').value = name;
+      closeSaveViewModal();
+      toast(T('vueEnregistree').replace('{v}', name));
+    });
+  }
+
+  var viewInput = document.getElementById('viewNameInput');
+  if (viewInput){
+    viewInput.addEventListener('keydown', function(e){
+      if (e.key === 'Enter') document.getElementById('btnSaveViewConfirm').click();
+      else if (e.key === 'Escape') closeSaveViewModal();
+    });
+  }
+
+  var modalSave = document.getElementById('modalSaveView');
+  if (modalSave){
+    modalSave.addEventListener('click', function(e){
+      if (e.target === this) closeSaveViewModal();
+    });
+  }
 
   document.getElementById('brand').insertAdjacentHTML('afterbegin',
     esc(BRAND.nom) + '&nbsp;<em>' + esc(BRAND.suffixe) + '</em>');

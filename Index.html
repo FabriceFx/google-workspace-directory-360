@@ -227,6 +227,20 @@ var BRAND = {
   </div>
 </div>
 
+<div class="modal-overlay" id="modalSaveView">
+  <div class="modal">
+    <h2 data-i18n="sauvegarderVue">Sauvegarder la vue</h2>
+    <p data-i18n="nomVueDesc">Donnez un nom à cette vue pour retrouver facilement vos filtres et colonnes :</p>
+    <div style="margin:14px 0">
+      <input type="text" id="viewNameInput" class="tinp" style="width:100%;font-size:14px;padding:8px 10px;" placeholder="Ex: Audit prestataires sans 2SV" maxlength="50">
+    </div>
+    <div class="modal-actions">
+      <button class="modal-btn" id="btnSaveViewCancel" data-i18n="annuler">Annuler</button>
+      <button class="modal-btn primary" id="btnSaveViewConfirm" data-i18n="sauvegarder">Sauvegarder</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 <datalist id="dlFields"></datalist>
 <datalist id="dlValues"></datalist>

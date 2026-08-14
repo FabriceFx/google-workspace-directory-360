@@ -2,6 +2,36 @@
 
 Toutes les modifications notables apportées à ce projet seront documentées dans ce fichier. / All notable changes to this project will be documented in this file.
 
+## [1.16.0] - 2026-08-14
+
+### 🇫🇷 Français
+
+**La robustesse silencieuse d'un outil d'audit qui ne ment jamais.**
+
+Un outil d'audit ne pardonne aucune approximation. Une alerte manquée ou un filtre qui bascule silencieusement sur de fausses données brise la confiance. Cette mise à jour verrouille l'isolation stricte des données entre collègues, fiabilise les requêtes sur les comptes supprimés et garantit la surveillance continue de sécurité sans jamais faillir.
+
+- 🔒 **Isolation stricte multi-utilisateurs** : isolation des préférences et vues enregistrées par utilisateur (`pref_<email>_views`) avec validation des accès sur tous les endpoints serveur.
+- 🛡️ **Comptes supprimés sans compromis** : compatibilité totale avec l'Admin SDK pour l'exploration des comptes supprimés récents sans risque de bascule démo.
+- ⏱️ **Rapport de surveillance résilient** : fiabilisation de l'exécution sous déclencheur horaire (`getEffectiveUser`) et persistance de l'état uniquement après délivrance confirmée de l'e-mail.
+- 💬 **Modale native pour les vues** : remplacement de `window.prompt` par une modale HTML intégrée, 100% compatible avec le bac à sable IFRAME.
+- ⚡ **Anti-concurrence des requêtes** : élimination des collisions lors des changements d'OU en cours de chargement via jeton de séquence (`loadSeq`).
+- 🧹 **Neutralisation étendue Sheets & Journal compact** : neutralisation complète des caractères de formule (`=`, `+`, `-`, `@`, `\t`, `\r`) et journal borné à 50 entrées pour respecter les quotas de stockage.
+- 🎯 **Harmonisation des règles métier** : cohérence parfaite des prédicats de détection entre le rapport par mail, les tuiles KPI et l'onglet Anomalies.
+
+### 🇺🇸 English
+
+**The silent robustness of an audit tool you can truly trust.**
+
+An audit tool leaves no room for silent failures. A missed security alert or an API query silently falling back to mock data breaks trust. This update enforces strict user isolation, fixes deleted accounts queries against Admin SDK limitations, and ensures flawless daily monitoring.
+
+- 🔒 **Strict multi-user isolation**: user-scoped views and preferences (`pref_<email>_views`) with server-side access checks across all endpoints.
+- 🛡️ **Uncompromised deleted accounts query**: full Admin SDK compliance when querying recently deleted accounts without falling back to demo data.
+- ⏱️ **Resilient daily report**: reliable background trigger execution (`getEffectiveUser`) with reference state saved only after successful email delivery.
+- 💬 **Native save-view modal**: replaced `window.prompt` with an inline DOM modal fully compatible with HtmlService IFRAME sandbox.
+- ⚡ **Race condition prevention**: sequenced streaming (`loadSeq`) preventing concurrent OU batches from interleaving.
+- 🧹 **Formula sanitization & bounded log**: complete formula escaping (`=`, `+`, `-`, `@`, `\t`, `\r`) on Sheets export and 50-entry log ring buffer respecting storage quotas.
+- 🎯 **Harmonized security rules**: unified detection predicates across email reports, KPI cards, and cross-account anomalies.
+
 ## [1.15.0] - 2026-08-14
 
 ### 🇫🇷 Français

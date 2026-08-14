@@ -40,7 +40,7 @@
 
 var CFG = {
   APP_NAME: 'Annuaire 360°',
-  VERSION: '1.15.0',
+  VERSION: '1.16.0',
   CUSTOMER: 'my_customer',       // résout le domaine du compte exécutant
   PAGE_SIZE: 500,                // max autorisé par l'API
   MAX_USERS: 9000,               // plafond du parc chargé
@@ -390,19 +390,24 @@ function safeOrgUnits_() {
   } catch (err) { return ['/']; }
 }
 
+/* ==========================================================================
+ *  4. PRÉFÉRENCES UTILISATEUR & VUES SAUVEGARDÉES (ISOLÉES PAR EMAIL)
+ * ======================================================================== */
 
-/**
- * Préférences utilisateur (mode d'affichage). PropertiesService plutôt que le
- * stockage navigateur : l'iframe HtmlService change d'origine selon le contexte.
- */
-/**
- * Amorçage : mode et langue mémorisés, plus la langue du compte Google pour
- * la première visite. Un seul aller-retour au lieu de trois.
- */
+function userPrefKey_(email, key) {
+  var safeEmail = String(email || '').toLowerCase().replace(/[^a-z0-9_]/gi, '_');
+  return 'u_' + safeEmail + '_' + key;
+}
+
 function apiInit() {
+  var acc = checkAccess_();
+  if (!acc.allowed) {
+    return { ok: false, errorCode: 'accesRefuse', user: acc.email, reason: acc.reason };
+  }
   var locale = '';
   try { locale = Session.getActiveUserLocale() || ''; } catch (err) { /* ignoré */ }
   return {
+    ok: true,
     mode: apiGetPref('mode'),
     lang: apiGetPref('lang'),
     views: apiGetPref('views'),
@@ -411,25 +416,31 @@ function apiInit() {
 }
 
 function apiGetPref(key) {
-  try { return PropertiesService.getUserProperties().getProperty('pref_' + key); }
+  var acc = checkAccess_();
+  if (!acc.allowed) return null;
+  var k = userPrefKey_(acc.email, key);
+  try { return PropertiesService.getScriptProperties().getProperty(k); }
   catch (err) { return null; }
 }
 
 function apiSetPref(key, value) {
-  try { PropertiesService.getUserProperties().setProperty('pref_' + key, String(value)); }
-  catch (err) { /* sans conséquence */ }
-  return true;
+  var acc = checkAccess_();
+  if (!acc.allowed) return false;
+  var validKeys = ['mode', 'lang', 'views'];
+  if (validKeys.indexOf(key) === -1) return false;
+  var k = userPrefKey_(acc.email, key);
+  try {
+    PropertiesService.getScriptProperties().setProperty(k, String(value));
+    return true;
+  } catch (err) { return false; }
 }
 
 /* ==========================================================================
  *  4 bis. JOURNAL D'USAGE
- *  L'outil expose l'annuaire complet : on consigne qui charge et qui exporte.
- *  Anneau borné dans ScriptProperties (partagé entre utilisateurs), écriture
- *  sous verrou pour éviter les pertes en cas d'accès concurrents.
  * ======================================================================== */
 
 var LOG_KEY = 'A360_LOG';
-var LOG_MAX = 300;             // entrées conservées (l'anneau écrase les plus anciennes)
+var LOG_MAX = 50;             // 50 entrées max pour rester bien sous la limite de 9 Ko de ScriptProperties
 
 function apiLogEvent(action, count) {
   var acc = checkAccess_();
@@ -460,20 +471,15 @@ function apiGetLog() {
   var log = [];
   try { log = JSON.parse(PropertiesService.getScriptProperties().getProperty(LOG_KEY) || '[]'); }
   catch (err) { log = []; }
-  return { ok: true, entries: log.reverse().slice(0, 200) };
+  return { ok: true, entries: log.reverse().slice(0, 50) };
 }
 
 /* ==========================================================================
  *  4 ter. EXPORT GOOGLE SHEETS
- *  Le classeur est créé par le compte de déploiement (« exécuter en tant que
- *  moi ») : il appartient donc à l'admin, est rangé dans un dossier dédié de
- *  son Drive, puis partagé en lecture avec le demandeur. Les valeurs sont
- *  écrites en tant que données : une cellule commençant par « = » est
- *  préfixée d'une apostrophe pour ne jamais devenir une formule.
  * ======================================================================== */
 
 var EXPORT_FOLDER_KEY = 'A360_EXPORT_FOLDER';
-var EXPORT_RETENTION_DAYS = 30;    // au-delà : corbeille, lors de l'export suivant
+var EXPORT_RETENTION_DAYS = 30;
 
 function apiExportToSheet(payload) {
   var acc = checkAccess_();
@@ -492,7 +498,7 @@ function apiExportToSheet(payload) {
       return cols.map(function (_, i) {
         var v = r[i];
         if (v === null || v === undefined) return '';
-        if (typeof v === 'string' && /^[=+@]/.test(v)) return "'" + v;
+        if (typeof v === 'string' && /^[=+\-@\t\r]/.test(v)) return "'" + v;
         return v;
       });
     }));
@@ -543,15 +549,10 @@ function purgeOldExports_() {
 
 /* ==========================================================================
  *  4 quater. RAPPORTS PLANIFIÉS
- *  Un déclencheur quotidien rejoue les contrôles critiques sur l'annuaire
- *  frais (sans cache) et n'envoie un e-mail QUE si les compteurs ont changé
- *  depuis le dernier passage (ou au premier passage, pour valider la chaîne).
- *  Installation : exécuter REPORT_install depuis l'éditeur (ou l'appeler en
- *  étant sur la liste blanche). Le mail part du compte de déploiement.
  * ======================================================================== */
 
 var REPORT_STATE_KEY = 'A360_REPORT_STATE';
-var REPORT_SAMPLE = 15;            // comptes cités au maximum par contrôle
+var REPORT_SAMPLE = 15;
 
 var REPORT_CHECKS = [
   { key: 'adminSans2sv',    label: 'Admins sans 2SV',
@@ -576,7 +577,7 @@ function reportDaily() {
   if (!acc.allowed) return;
 
   var users;
-  try { users = fetchAllUsers_({}); } catch (err) { return; }   // API indisponible : on retentera demain
+  try { users = fetchAllUsers_({}); } catch (err) { return; }
 
   var counts = {}, samples = {};
   REPORT_CHECKS.forEach(function (c) {
@@ -593,7 +594,6 @@ function reportDaily() {
     return (prev.counts || {})[c.key] !== counts[c.key];
   });
 
-  props.setProperty(REPORT_STATE_KEY, JSON.stringify({ counts: counts, t: new Date().toISOString(), total: users.length }));
   if (!changed) return;
 
   var rows = REPORT_CHECKS.map(function (c) {
@@ -611,22 +611,29 @@ function reportDaily() {
 
   var to = reportRecipients_();
   if (!to) return;
-  MailApp.sendEmail({
-    to: to,
-    subject: '[' + CFG.APP_NAME + '] Contrôle annuaire : des indicateurs ont changé (' + users.length + ' comptes)',
-    htmlBody: '<p>' + (prev ? 'Des indicateurs ont changé depuis le dernier contrôle'
-                            + (prev.t ? ' (' + prev.t.substring(0, 10) + ')' : '') + '.'
-                           : 'Premier contrôle : voici l\'état de référence.') + '</p>'
-      + '<table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px">'
-      + '<tr><th style="padding:6px 10px;text-align:left;border-bottom:2px solid #1a73e8">Contrôle</th>'
-      + '<th style="padding:6px 10px;text-align:right;border-bottom:2px solid #1a73e8">Avant</th>'
-      + '<th style="padding:6px 10px;text-align:right;border-bottom:2px solid #1a73e8">Maintenant</th>'
-      + '<th style="padding:6px 10px;text-align:right;border-bottom:2px solid #1a73e8">Δ</th></tr>'
-      + rows + '</table>'
-      + '<p style="color:#5f6368;font-size:11px">' + CFG.APP_NAME + ' v' + CFG.VERSION
-      + ' — rapport automatique quotidien. Exécutez REPORT_uninstall pour l\'arrêter.</p>'
-  });
-  apiLogEvent('report', users.length);
+  
+  try {
+    MailApp.sendEmail({
+      to: to,
+      subject: '[' + CFG.APP_NAME + '] Contrôle annuaire : des indicateurs ont changé (' + users.length + ' comptes)',
+      htmlBody: '<p>' + (prev ? 'Des indicateurs ont changé depuis le dernier contrôle'
+                              + (prev.t ? ' (' + prev.t.substring(0, 10) + ')' : '') + '.'
+                             : 'Premier contrôle : voici l\'état de référence.') + '</p>'
+        + '<table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px">'
+        + '<tr><th style="padding:6px 10px;text-align:left;border-bottom:2px solid #1a73e8">Contrôle</th>'
+        + '<th style="padding:6px 10px;text-align:right;border-bottom:2px solid #1a73e8">Avant</th>'
+        + '<th style="padding:6px 10px;text-align:right;border-bottom:2px solid #1a73e8">Maintenant</th>'
+        + '<th style="padding:6px 10px;text-align:right;border-bottom:2px solid #1a73e8">Δ</th></tr>'
+        + rows + '</table>'
+        + '<p style="color:#5f6368;font-size:11px">' + CFG.APP_NAME + ' v' + CFG.VERSION
+        + ' — rapport automatique quotidien. Exécutez REPORT_uninstall pour l\'arrêter.</p>'
+    });
+    // Enregistrement de l'état de référence UNIQUEMENT après succès de l'envoi
+    props.setProperty(REPORT_STATE_KEY, JSON.stringify({ counts: counts, t: new Date().toISOString(), total: users.length }));
+    apiLogEvent('report', users.length);
+  } catch (err) {
+    // Erreur d'envoi (ex: quota email) : ne pas écraser l'état pour retenter lors du prochain passage
+  }
 }
 
 /** Installe (ou réinstalle) le déclencheur quotidien. À lancer une seule fois. */
