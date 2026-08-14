@@ -756,15 +756,26 @@ function demoUsers_() {
     ['Manon',   'GIRAUD',    'Assistante RH',              'Ressources humaines', 'Paie',           'Employé',          'Site Nord', 10009, false, true,  true,  '2026-08-12T16:40:12.000Z', '/Standard', 'female'],
     ['Elias',   'BLANC',     'Développeur',                'Systèmes d\'information', 'Études et développement', 'Cadre','Site Nord', 10010, false, true,  true,  '2026-08-13T07:31:09.000Z', '/Standard', 'male'],
     ['Jade',    'MERCIER',   'Chargée de communication',   'Communication',    'Marque employeur',  'Cadre',            'Site Nord', 10011, false, true,  false, '2025-11-28T13:12:55.000Z', '/Standard', 'female'],
-    ['Hugo',    'CHEVALIER', 'Chauffeur',                  'Transport',        'Flotte Ouest',      'Ouvrier',          'Site Sud',  10012, false, false, false, '2026-01-07T05:11:40.000Z', '/Terrain',  'male']
+    ['Hugo',    'CHEVALIER', 'Chauffeur',                  'Transport',        'Flotte Ouest',      'Ouvrier',          'Site Sud',  10012, false, false, false, '2026-01-07T05:11:40.000Z', '/Terrain',  'male'],
+    ['Service', 'SUPPORT',   'Support Informatique',       'Systèmes d\'information', 'Helpdesk',  'Service',          'Site Nord', 10098, false, true,  true,  '2026-08-13T04:00:00.000Z', '/Services', 'other'],
+    ['Contact', 'ACCUEIL',   'Standard & Accueil',         'Moyens Généraux',  'Accueil',           'Générique',        'Site Nord', 10099, false, false, false, '2026-08-13T04:00:00.000Z', '/Services', 'other']
   ];
 
-  var manager = norm_(seeds[1][0]) + '.' + norm_(seeds[1][1]) + '@' + domaine;
+  var mgrDsi = norm_(seeds[1][0]) + '.' + norm_(seeds[1][1]) + '@' + domaine;   // Camille DUVAL (DSI)
+  var mgrApp = norm_(seeds[0][0]) + '.' + norm_(seeds[0][1]) + '@' + domaine;   // Alix BERTRAND (Resp. applicatif)
+  var mgrExp = norm_(seeds[3][0]) + '.' + norm_(seeds[3][1]) + '@' + domaine;   // Inès MARCHAND (Resp. exploitation)
 
   return seeds.map(function (s, i) {
     var login = norm_(s[0]) + '.' + norm_(s[1]);
     var sud = (s[6] === 'Site Sud');
     var suspendu = (i === 10);
+
+    // Hiérarchie réaliste multi-niveaux
+    var mgr = mgrDsi;
+    if (i === 1 || i >= 12) mgr = '';                  // DSI (racine) ou comptes de service (aucun manager)
+    else if (i === 9) mgr = mgrApp;                    // Elias (Dev) reporte à Alix (Resp App)
+    else if (i === 5 || i === 7) mgr = mgrExp;         // Lou (Conducteur) et Tom (Logistique) reportent à Inès (Resp Exp)
+    else if (i === 11) mgr = '';                       // Hugo (Chauffeur) sans manager (Anomalie RH volontaire)
 
     return {
       id: '900000000000000000' + (10 + i),
@@ -776,7 +787,7 @@ function demoUsers_() {
       agreedToTerms: true, suspended: suspendu, archived: false,
       changePasswordAtNextLogin: (i === 5), ipWhitelisted: false,
       emails: [{ address: login + '@' + domaine, primary: true }],
-      relations: (i === 1) ? [] : [{ value: manager, type: 'manager' }],
+      relations: mgr ? [{ value: mgr, type: 'manager' }] : [],
       addresses: [{ type: 'work', formatted: sud ? '4 route des Ateliers - 00000 Ville-Sud'
                                                  : '1 avenue de l\'Exemple - 00000 Ville-Nord' }],
       organizations: [{

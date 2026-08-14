@@ -974,6 +974,8 @@ function toggleCol(p){
 function switchTab(t){
   S.tab = t;
   document.querySelectorAll('.tabs .tab').forEach(function(b){ b.classList.toggle('on', b.dataset.tab === t); });
+  document.body.classList.toggle('tab-orgchart', t === 'orgchart');
+  document.body.classList.toggle('tab-anomalies', t === 'anomalies');
   document.getElementById('viewResults').style.display = t === 'results' ? '' : 'none';
   document.getElementById('viewPivot').style.display = t === 'pivot' ? '' : 'none';
   document.getElementById('viewCatalog').style.display = t === 'catalog' ? '' : 'none';
