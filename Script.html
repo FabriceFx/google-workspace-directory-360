@@ -71,6 +71,10 @@ var I18N = {
   orgSansMgr:        ['Collaborateurs sans manager', 'Members without manager'],
   orgAucunArbre:     ['Aucune relation hiérarchique détectée dans l\'annuaire.', 'No reporting hierarchy detected in directory.'],
   orgSubordonnes:    ['{n} direct(s)', '{n} direct report(s)'],
+  orgTouteOrg:       ['— Toute l\'organisation —', '— Entire organization —'],
+  orgIsolerBranche:  ['Isoler cette branche managériale', 'Focus on this management branch'],
+  orgVoirTout:       ['Afficher toute l\'organisation', 'Show entire organization'],
+  orgRacineActive:   ['Branche active : ', 'Active branch: '],
   // barre supérieure
   aPropos:           ['À propos', 'About'],
   recharger:         ['↻ Recharger', '↻ Reload'],
@@ -1873,7 +1877,8 @@ var S_org = {
   search: '',
   hideGeneric: false,
   collapsed: {},
-  zoom: 1
+  zoom: 1,
+  rootFocus: ''
 };
 
 function renderOrgChart(){
@@ -1886,6 +1891,20 @@ function renderOrgChart(){
   var genericAccounts = data.genericAccounts;
 
   var q = (S_org.search || '').toLowerCase();
+
+  // Si une racine spécifique est sélectionnée
+  if (S_org.rootFocus && userMap[S_org.rootFocus]){
+    roots = [S_org.rootFocus];
+  } else {
+    S_org.rootFocus = '';
+  }
+
+  // Liste de tous les managers ayant des subordonnés pour le sélecteur
+  var managersList = Object.keys(children).map(function(m){
+    var r = userMap[m];
+    var name = (r && r.u && r.u.name && r.u.name.fullName) || m;
+    return { mail: m, name: name, count: (children[m] || []).length };
+  }).sort(function(a, b){ return a.name.localeCompare(b.name, LOC()); });
 
   function renderCard(mail){
     var r = userMap[mail];
@@ -1901,6 +1920,11 @@ function renderOrgChart(){
 
     var html = '<li class="' + (isColl ? 'org-collapsed' : '') + '">';
     html += '<div class="org-card' + (isMatch ? ' highlight' : '') + '" data-mail="' + esc(mail) + '">';
+    
+    if (ch.length && S_org.rootFocus !== mail){
+      html += '<button class="org-card-focus" data-focus="' + esc(mail) + '" title="' + esc(T('orgIsolerBranche')) + '">🎯</button>';
+    }
+
     html += '<div class="org-card-top">';
     html += '<div class="org-card-av">' + (u.thumbnailPhotoUrl ? '<img src="' + esc(u.thumbnailPhotoUrl) + '" alt="">' : initials) + '</div>';
     html += '<div style="flex:1;min-width:0">';
@@ -1926,10 +1950,21 @@ function renderOrgChart(){
   }
 
   var treeHtml = '';
+  if (S_org.rootFocus && userMap[S_org.rootFocus]){
+    var focusUser = userMap[S_org.rootFocus].u;
+    var focusName = (focusUser.name && focusUser.name.fullName) || S_org.rootFocus;
+    treeHtml += '<div class="org-breadcrumb">'
+      + '<span>' + esc(T('orgRacineActive')) + '</span>'
+      + '<b>' + esc(focusName) + ' (' + esc(S_org.rootFocus) + ')</b>'
+      + '<div class="grow"></div>'
+      + '<button class="org-breadcrumb-btn" id="btnOrgResetRoot">✕ ' + esc(T('orgVoirTout')) + '</button>'
+      + '</div>';
+  }
+
   if (!roots.length){
-    treeHtml = '<div class="hint" style="padding:40px;text-align:center;">' + esc(T('orgAucunArbre')) + '</div>';
+    treeHtml += '<div class="hint" style="padding:40px;text-align:center;">' + esc(T('orgAucunArbre')) + '</div>';
   } else {
-    treeHtml = '<div class="org-tree" id="orgTreeEl" style="transform:scale(' + S_org.zoom + ');"><ul>' + roots.map(renderCard).join('') + '</ul></div>';
+    treeHtml += '<div class="org-tree" id="orgTreeEl" style="transform:scale(' + S_org.zoom + ');"><ul>' + roots.map(renderCard).join('') + '</ul></div>';
   }
 
   var sideNonRattaches = nonRattaches.filter(function(r){
@@ -1957,8 +1992,18 @@ function renderOrgChart(){
          + '</div></div>';
   }
 
+  var rootSelectHtml = '<select class="org-root-select" id="orgRootSelect">'
+    + '<option value="">' + esc(T('orgTouteOrg')) + '</option>'
+    + managersList.map(function(mgr){
+        return '<option value="' + esc(mgr.mail) + '"' + (S_org.rootFocus === mgr.mail ? ' selected' : '') + '>'
+             + esc(mgr.name + ' (' + mgr.count + ' N-1)')
+             + '</option>';
+      }).join('')
+    + '</select>';
+
   v.innerHTML = '<div class="org-wrap">'
     + '<div class="org-bar">'
+    + rootSelectHtml
     + '<input type="text" class="org-search" id="orgSearchInput" placeholder="' + esc(T('orgRechercher')) + '" value="' + esc(S_org.search) + '">'
     + '<button class="btn" id="btnOrgExpandAll">' + esc(T('orgDeployerTout')) + '</button>'
     + '<button class="btn" id="btnOrgCollapseAll">' + esc(T('orgReplierTout')) + '</button>'
@@ -1987,6 +2032,22 @@ function renderOrgChart(){
     + '</div>';
 
   // Event handlers
+  var rootSel = document.getElementById('orgRootSelect');
+  if (rootSel){
+    rootSel.addEventListener('change', function(){
+      S_org.rootFocus = this.value;
+      renderOrgChart();
+    });
+  }
+
+  var resetRootBtn = document.getElementById('btnOrgResetRoot');
+  if (resetRootBtn){
+    resetRootBtn.addEventListener('click', function(){
+      S_org.rootFocus = '';
+      renderOrgChart();
+    });
+  }
+
   var searchInput = document.getElementById('orgSearchInput');
   if (searchInput){
     searchInput.addEventListener('input', function(){
@@ -2043,7 +2104,7 @@ function renderOrgChart(){
   if (mainEl){
     var isDown = false, startX, startY, sLeft, sTop;
     mainEl.addEventListener('mousedown', function(e){
-      if (e.target.closest('.org-card-toggle') || e.target.closest('button') || e.target.closest('input')) return;
+      if (e.target.closest('.org-card-toggle') || e.target.closest('.org-card-focus') || e.target.closest('button') || e.target.closest('input') || e.target.closest('select')) return;
       isDown = true;
       mainEl.classList.add('grabbing');
       startX = e.pageX - mainEl.offsetLeft;
@@ -2070,6 +2131,15 @@ function renderOrgChart(){
       e.stopPropagation();
       var mail = this.dataset.toggle;
       S_org.collapsed[mail] = !S_org.collapsed[mail];
+      renderOrgChart();
+    });
+  });
+
+  v.querySelectorAll('.org-card-focus').forEach(function(btn){
+    btn.addEventListener('click', function(e){
+      e.stopPropagation();
+      var mail = this.dataset.focus;
+      S_org.rootFocus = mail;
       renderOrgChart();
     });
   });
@@ -2375,6 +2445,19 @@ document.addEventListener('DOMContentLoaded', function(){
     navigator.clipboard.writeText(txt).then(function(){ toast(T('jsonCopie')); },
       function(){ toast(T('copieImpossible')); });
   });
+
+  var dOrgBtn = document.getElementById('dOrg');
+  if (dOrgBtn){
+    dOrgBtn.addEventListener('click', function(){
+      if (!S.current || !S.current.u) return;
+      var mail = S.current.u.primaryEmail;
+      switchMode('expert');
+      switchTab('orgchart');
+      S_org.rootFocus = mail;
+      closeDrawer();
+      renderOrgChart();
+    });
+  }
 
   document.getElementById('btnExport').addEventListener('click', exportCsv);
   document.getElementById('btnSheet').addEventListener('click', exportSheet);

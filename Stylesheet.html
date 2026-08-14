@@ -369,6 +369,17 @@ body.tab-orgchart .side, body.tab-anomalies .side{display:none}
 .org-card-toggle{position:absolute;bottom:-10px;left:50%;transform:translateX(-50%);background:#fff;border:1px solid var(--bord);border-radius:10px;padding:1px 6px;font-size:10px;font-weight:700;color:var(--txt2);cursor:pointer;display:flex;align-items:center;gap:3px;box-shadow:0 1px 2px rgba(0,0,0,.08);z-index:2}
 .org-card-toggle:hover{background:var(--bleu-clair);border-color:var(--bleu);color:var(--bleu)}
 .org-collapsed > ul{display:none!important}
+.org-card-focus{position:absolute;top:6px;right:6px;background:var(--gris);border:1px solid var(--bord);border-radius:4px;padding:2px 5px;font-size:10.5px;cursor:pointer;opacity:0.4;transition:opacity .14s,background .14s;line-height:1}
+.org-card:hover .org-card-focus{opacity:1}
+.org-card-focus:hover{background:var(--bleu-clair);border-color:var(--bleu);color:var(--bleu)}
+
+/* Fil d'Ariane et sélection de racine */
+.org-breadcrumb{display:flex;align-items:center;gap:8px;padding:6px 12px;background:var(--bleu-clair);border:1px solid var(--bleu-ligne);border-radius:var(--r);font-size:12px;color:var(--bleu-fonce);margin-bottom:12px}
+.org-breadcrumb b{color:var(--txt)}
+.org-breadcrumb-btn{background:#fff;border:1px solid var(--bleu-ligne);color:var(--bleu-fonce);border-radius:var(--r);padding:2px 8px;font-size:11px;font-weight:600;cursor:pointer}
+.org-breadcrumb-btn:hover{background:var(--bleu);border-color:var(--bleu);color:#fff}
+.org-root-select{border:1px solid var(--bord);border-radius:var(--r);padding:5px 8px;font-size:12px;background:#fff;max-width:240px}
+.org-root-select:focus{outline:none;border-color:var(--bleu)}
 
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 @media(max-width:900px){.side{display:none}.drawer{width:100%}.toolbar{gap:7px}.org-layout{flex-direction:column}.org-side{width:100%;flex:auto}}
