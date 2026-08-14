@@ -565,24 +565,104 @@ function purgeOldExports_() {
 }
 
 /* ==========================================================================
- *  4 quater. RAPPORTS PLANIFIÉS
+ *  4 quater. RAPPORTS PLANIFIÉS & REGISTRE UNIFIÉ DES RÈGLES (AUDIT_RULES)
  * ======================================================================== */
 
 var REPORT_STATE_KEY = 'A360_REPORT_STATE';
 var REPORT_SAMPLE = 15;
 
-var REPORT_CHECKS = [
-  { key: 'adminSans2sv',    label: 'Admins sans 2SV',
-    test: function (u) { return !u.suspended && (u.isAdmin || u.isDelegatedAdmin) && !u.isEnrolledIn2Sv; } },
-  { key: 'sans2sv',         label: 'Comptes actifs sans 2SV',
-    test: function (u) { return !u.suspended && !u.isEnrolledIn2Sv; } },
-  { key: 'sansRecuperation', label: 'Comptes actifs sans moyen de récupération',
-    test: function (u) { return !u.suspended && !u.recoveryEmail && !u.recoveryPhone; } },
-  { key: 'jamaisConnectes', label: 'Comptes jamais connectés',
-    test: function (u) { return !u.suspended && (!u.lastLoginTime || String(u.lastLoginTime).indexOf('1970') === 0); } },
-  { key: 'suspendus',       label: 'Comptes suspendus',
-    test: function (u) { return u.suspended === true; } }
+/**
+ * Registre centralisé des règles de conformité et de sécurité (SSOT).
+ * Utilisé pour le rapport planifié serveur, les alertes de conformité et les KPI.
+ */
+var AUDIT_RULES = [
+  {
+    id: 'adminSans2sv',
+    labelFr: 'Admins sans 2SV',
+    labelEn: 'Admins without 2SV',
+    severity: 'high',
+    inDailyReport: true,
+    alertTag: 'admin sans 2SV',
+    test: function (u) { return !u.suspended && (u.isAdmin || u.isDelegatedAdmin) && !u.isEnrolledIn2Sv; },
+    filters: [['calc.estAdmin', 'eq', 'true'], ['isEnrolledIn2Sv', 'eq', 'false'], ['suspended', 'eq', 'false']]
+  },
+  {
+    id: 'sans2sv',
+    labelFr: 'Comptes actifs sans 2SV',
+    labelEn: 'Active accounts without 2SV',
+    severity: 'high',
+    kpiKey: 'kpiSans2sv',
+    kpiAlert: true,
+    inDailyReport: true,
+    alertTag: 'sans 2SV',
+    test: function (u) { return !u.suspended && !u.isEnrolledIn2Sv; },
+    filters: [['isEnrolledIn2Sv', 'eq', 'false'], ['suspended', 'eq', 'false']]
+  },
+  {
+    id: 'sansRecuperation',
+    labelFr: 'Comptes actifs sans moyen de récupération',
+    labelEn: 'Active accounts without recovery info',
+    severity: 'medium',
+    inDailyReport: true,
+    alertTag: 'sans récupération',
+    test: function (u) { return !u.suspended && !u.recoveryEmail && !u.recoveryPhone; },
+    filters: [['recoveryEmail', 'empty', ''], ['recoveryPhone', 'empty', ''], ['suspended', 'eq', 'false']]
+  },
+  {
+    id: 'jamaisConnecte',
+    labelFr: 'Comptes jamais connectés',
+    labelEn: 'Never logged in accounts',
+    severity: 'medium',
+    kpiKey: 'kpiJamais',
+    kpiAlert: false,
+    inDailyReport: true,
+    alertTag: 'jamais connecté',
+    test: function (u) { return !u.suspended && (!u.lastLoginTime || String(u.lastLoginTime).indexOf('1970') === 0); },
+    filters: [['calc.jamaisConnecte', 'eq', 'true'], ['suspended', 'eq', 'false']]
+  },
+  {
+    id: 'sansManager',
+    labelFr: 'Collaborateurs sans manager',
+    labelEn: 'Members without manager',
+    severity: 'low',
+    alertTag: 'sans manager',
+    test: function (u) { return !u.suspended && !(u.relations || []).some(function(r){ return r.type === 'manager'; }); },
+    filters: [['calc.aManager', 'eq', 'false'], ['suspended', 'eq', 'false']]
+  },
+  {
+    id: 'mdpAChanger',
+    labelFr: 'Mot de passe temporaire à renouveler',
+    labelEn: 'Password change required',
+    severity: 'medium',
+    alertTag: 'mot de passe à changer',
+    test: function (u) { return !u.suspended && !!u.changePasswordAtNextLogin; },
+    filters: [['changePasswordAtNextLogin', 'eq', 'true'], ['suspended', 'eq', 'false']]
+  },
+  {
+    id: 'boiteNonConfiguree',
+    labelFr: 'Boîte Gmail non configurée',
+    labelEn: 'Mailbox not setup',
+    severity: 'low',
+    alertTag: 'boîte non configurée',
+    test: function (u) { return !u.suspended && u.isMailboxSetup === false; },
+    filters: [['isMailboxSetup', 'eq', 'false'], ['suspended', 'eq', 'false']]
+  },
+  {
+    id: 'suspendus',
+    labelFr: 'Comptes suspendus',
+    labelEn: 'Suspended accounts',
+    severity: 'info',
+    kpiKey: 'kpiSuspendus',
+    kpiAlert: false,
+    inDailyReport: true,
+    test: function (u) { return u.suspended === true; },
+    filters: [['suspended', 'eq', 'true']]
+  }
 ];
+
+var REPORT_CHECKS = AUDIT_RULES.filter(function (r) { return r.inDailyReport; }).map(function (r) {
+  return { key: r.id, label: r.labelFr, test: r.test };
+});
 
 function reportRecipients_() {
   if (CFG.REPORT_RECIPIENTS && CFG.REPORT_RECIPIENTS.length) return CFG.REPORT_RECIPIENTS.join(',');

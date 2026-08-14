@@ -16,7 +16,7 @@ Un outil d'audit ne pardonne aucune approximation. Une alerte manquée ou un fil
 - 💬 **Modale native pour les vues** : remplacement de `window.prompt` par une modale HTML intégrée, 100% compatible avec le bac à sable IFRAME.
 - ⚡ **Anti-concurrence des requêtes** : élimination des collisions lors des changements d'OU en cours de chargement via jeton de séquence (`loadSeq`).
 - 🧹 **Neutralisation étendue Sheets & Journal compact** : neutralisation complète des caractères de formule (`=`, `+`, `-`, `@`, `\t`, `\r`) et journal borné à 50 entrées pour respecter les quotas de stockage.
-- 🎯 **Harmonisation des règles métier** : cohérence parfaite des prédicats de détection entre le rapport par mail, les tuiles KPI et l'onglet Anomalies.
+- 🎯 **Registre unifié des règles d'audit (SSOT)** : table centrale unique `AUDIT_RULES` pilotant simultanément `derive()`, les tuiles `KPIS` (via `testOne`) et `REPORT_CHECKS` sans duplication ni divergence.
 
 ### 🇺🇸 English
 

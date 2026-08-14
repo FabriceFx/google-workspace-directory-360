@@ -395,6 +395,95 @@ function flatten(user){
 }
 
 /**
+ * Registre centralisé des règles de conformité et de sécurité (SSOT).
+ * Unifie derive(), KPIS et REPORT_CHECKS sans divergence.
+ */
+var AUDIT_RULES = [
+  {
+    id: 'adminSans2sv',
+    labelFr: 'Admins sans 2SV',
+    labelEn: 'Admins without 2SV',
+    severity: 'high',
+    inDailyReport: true,
+    alertTag: 'admin sans 2SV',
+    test: function(u){ return !u.suspended && (u.isAdmin || u.isDelegatedAdmin) && !u.isEnrolledIn2Sv; },
+    filters: [['calc.estAdmin', 'eq', 'true'], ['isEnrolledIn2Sv', 'eq', 'false'], ['suspended', 'eq', 'false']]
+  },
+  {
+    id: 'sans2sv',
+    labelFr: 'Comptes actifs sans 2SV',
+    labelEn: 'Active accounts without 2SV',
+    severity: 'high',
+    kpiKey: 'kpiSans2sv',
+    kpiAlert: true,
+    inDailyReport: true,
+    alertTag: 'sans 2SV',
+    test: function(u){ return !u.suspended && !u.isEnrolledIn2Sv; },
+    filters: [['isEnrolledIn2Sv', 'eq', 'false'], ['suspended', 'eq', 'false']]
+  },
+  {
+    id: 'sansRecuperation',
+    labelFr: 'Comptes actifs sans moyen de récupération',
+    labelEn: 'Active accounts without recovery info',
+    severity: 'medium',
+    inDailyReport: true,
+    alertTag: 'sans récupération',
+    test: function(u){ return !u.suspended && !u.recoveryEmail && !u.recoveryPhone; },
+    filters: [['recoveryEmail', 'empty', ''], ['recoveryPhone', 'empty', ''], ['suspended', 'eq', 'false']]
+  },
+  {
+    id: 'jamaisConnecte',
+    labelFr: 'Comptes jamais connectés',
+    labelEn: 'Never logged in accounts',
+    severity: 'medium',
+    kpiKey: 'kpiJamais',
+    kpiAlert: false,
+    inDailyReport: true,
+    alertTag: 'jamais connecté',
+    test: function(u){ return !u.suspended && (!u.lastLoginTime || String(u.lastLoginTime).indexOf('1970') === 0); },
+    filters: [['calc.jamaisConnecte', 'eq', 'true'], ['suspended', 'eq', 'false']]
+  },
+  {
+    id: 'sansManager',
+    labelFr: 'Collaborateurs sans manager',
+    labelEn: 'Members without manager',
+    severity: 'low',
+    alertTag: 'sans manager',
+    test: function(u){ return !u.suspended && !(u.relations || []).some(function(r){ return r.type === 'manager'; }); },
+    filters: [['calc.aManager', 'eq', 'false'], ['suspended', 'eq', 'false']]
+  },
+  {
+    id: 'mdpAChanger',
+    labelFr: 'Mot de passe temporaire à renouveler',
+    labelEn: 'Password change required',
+    severity: 'medium',
+    alertTag: 'mot de passe à changer',
+    test: function(u){ return !u.suspended && !!u.changePasswordAtNextLogin; },
+    filters: [['changePasswordAtNextLogin', 'eq', 'true'], ['suspended', 'eq', 'false']]
+  },
+  {
+    id: 'boiteNonConfiguree',
+    labelFr: 'Boîte Gmail non configurée',
+    labelEn: 'Mailbox not setup',
+    severity: 'low',
+    alertTag: 'boîte non configurée',
+    test: function(u){ return !u.suspended && u.isMailboxSetup === false; },
+    filters: [['isMailboxSetup', 'eq', 'false'], ['suspended', 'eq', 'false']]
+  },
+  {
+    id: 'suspendus',
+    labelFr: 'Comptes suspendus',
+    labelEn: 'Suspended accounts',
+    severity: 'info',
+    kpiKey: 'kpiSuspendus',
+    kpiAlert: false,
+    inDailyReport: true,
+    test: function(u){ return u.suspended === true; },
+    filters: [['suspended', 'eq', 'true']]
+  }
+];
+
+/**
  * Indicateurs dérivés, groupe « calc ». Ils n'existent pas dans l'API mais
  * répondent aux questions qu'on pose réellement à un annuaire.
  */
@@ -446,27 +535,25 @@ function derive(u, add){
   // --- Hiérarchie / OU ---
   var mgr = (u.relations || []).filter(function(r){ return r.type === 'manager'; });
   put('aManager', mgr.length > 0);
-  if (!mgr.length) alertes.push('sans manager');
   var ou = u.orgUnitPath || '/';
   put('profondeurOU', ou === '/' ? 0 : ou.split('/').length - 1);
   put('ouRacine', ou === '/' ? '/' : '/' + ou.split('/')[1]);
 
-  // --- Sécurité ---
+  // --- Sécurité & Rôle ---
   var admin = !!(u.isAdmin || u.isDelegatedAdmin);
   put('estAdmin', admin);
-  if (!u.suspended){
-    if (!u.isEnrolledIn2Sv){
-      alertes.push('sans 2SV');
-      if (admin) alertes.push('admin sans 2SV');
-    }
-    if (!u.recoveryEmail && !u.recoveryPhone) alertes.push('sans récupération');
-    if (u.changePasswordAtNextLogin) alertes.push('mot de passe à changer');
-    if (u.isMailboxSetup === false) alertes.push('boîte non configurée');
-  }
+
   if (u.recoveryEmail && mail.indexOf('@') !== -1){
     var dr = String(u.recoveryEmail).split('@')[1] || '';
     put('recuperationExterne', dr.toLowerCase() !== mail.split('@')[1].toLowerCase());
   }
+
+  // --- Évaluation automatique des alertes via le registre AUDIT_RULES ---
+  AUDIT_RULES.forEach(function(r){
+    if (r.alertTag && r.test(u)){
+      alertes.push(r.alertTag);
+    }
+  });
 
   // --- Complétude des schémas personnalisés ---
   var cs = u.customSchemas || {}, tot = 0, ok = 0, vides = [];
@@ -1692,13 +1779,15 @@ function applyView(name){
  *  Garantit une cohérence mathématique et structurelle absolue (compteur = résultat).
  * ======================================================================== */
 var KPIS = [
-  { k:'kpiTotal',     alert:false, f:[] },
-  { k:'kpiSans2sv',   alert:true,  f:[['isEnrolledIn2Sv','eq','false'],['suspended','eq','false']] },
-  { k:'kpiAdmins',    alert:false, f:[['calc.estAdmin','eq','true']] },
-  { k:'kpiJamais',    alert:false, f:[['calc.jamaisConnecte','eq','true'],['suspended','eq','false']] },
-  { k:'kpiSuspendus', alert:false, f:[['suspended','eq','true']] },
-  { k:'kpiAlertes',   alert:true,  f:[['calc.nbAlertes','gte','1']] }
-];
+  { k:'kpiTotal', alert:false, f:[] }
+].concat(
+  AUDIT_RULES.filter(function(r){ return r.kpiKey; }).map(function(r){
+    return { k: r.kpiKey, alert: !!r.kpiAlert, f: r.filters };
+  })
+).concat([
+  { k:'kpiAdmins', alert:false, f:[['calc.estAdmin','eq','true']] },
+  { k:'kpiAlertes', alert:true, f:[['calc.nbAlertes','gte','1']] }
+]);
 
 function renderKpis(){
   var box = document.getElementById('kpis');
