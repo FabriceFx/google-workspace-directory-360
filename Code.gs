@@ -40,7 +40,7 @@
 
 var CFG = {
   APP_NAME: 'Annuaire 360°',
-  VERSION: '1.14.0',
+  VERSION: '1.15.0',
   CUSTOMER: 'my_customer',       // résout le domaine du compte exécutant
   PAGE_SIZE: 500,                // max autorisé par l'API
   MAX_USERS: 9000,               // plafond du parc chargé

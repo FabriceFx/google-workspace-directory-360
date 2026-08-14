@@ -61,6 +61,16 @@ var I18N = {
   exportSheet:       ['↗ Google Sheets', '↗ Google Sheets'],
   exportSheetEnCours:['Création du classeur Google Sheets…', 'Creating the Google Sheets file…'],
   exportSheetOk:     ['Classeur créé et partagé en lecture :', 'Spreadsheet created and shared (view access):'],
+  // organigramme
+  ongletOrganigramme:['Organigramme', 'Org chart'],
+  orgRechercher:     ['Rechercher un collaborateur…', 'Search member…'],
+  orgMasquerTech:    ['Masquer les comptes de service', 'Hide service accounts'],
+  orgDeployerTout:   ['Tout déplier', 'Expand all'],
+  orgReplierTout:    ['Tout replier', 'Collapse all'],
+  orgComptesTech:    ['Comptes de service & génériques', 'Service & generic accounts'],
+  orgSansMgr:        ['Collaborateurs sans manager', 'Members without manager'],
+  orgAucunArbre:     ['Aucune relation hiérarchique détectée dans l\'annuaire.', 'No reporting hierarchy detected in directory.'],
+  orgSubordonnes:    ['{n} direct(s)', '{n} direct report(s)'],
   // barre supérieure
   aPropos:           ['À propos', 'About'],
   recharger:         ['↻ Recharger', '↻ Reload'],
@@ -850,6 +860,7 @@ function render(){
   if (S.tab === 'pivot') renderPivot();
   if (S.tab === 'catalog') renderCatalog();
   if (S.tab === 'anomalies') renderAnomalies();
+  if (S.tab === 'orgchart') renderOrgChart();
   renderFieldList();
 }
 
@@ -967,6 +978,7 @@ function switchTab(t){
   document.getElementById('viewPivot').style.display = t === 'pivot' ? '' : 'none';
   document.getElementById('viewCatalog').style.display = t === 'catalog' ? '' : 'none';
   document.getElementById('viewAnomalies').style.display = t === 'anomalies' ? '' : 'none';
+  document.getElementById('viewOrgchart').style.display = t === 'orgchart' ? '' : 'none';
   render();
 }
 
@@ -1767,6 +1779,245 @@ function renderAnomalies(){
 function openByEmail(mail){
   var hit = S.rows.filter(function(r){ return r.u.primaryEmail === mail; })[0];
   if (hit) openRow(hit);
+}
+
+/* ==========================================================================
+ *  ORGANIGRAMME DYNAMIQUE (ORG CHART) & GESTION DES COMPTES GÉNÉRIQUES
+ * ======================================================================== */
+
+function isGenericAccount(u){
+  if (!u) return false;
+  var mail = String(u.primaryEmail || '').toLowerCase();
+  var pfx = mail.split('@')[0] || '';
+  var name = ((u.name && u.name.fullName) || '').toLowerCase();
+  var ou = String(u.orgUnitPath || '').toLowerCase();
+
+  if (/service|ressource|partag|generiq|techniq|salle|room|bot|device|materiel/i.test(ou)) return true;
+  if (/^(admin|contact|support|info|service|technique|helpdesk|billing|facturation|scanner|noreply|no-reply|api|dev|infra|bot|partage|salle|meeting|room|accueil|rh|recrutement|direction|secretariat|commercial|sales|marketing|compta|comptabilite|alert|alertes|notification|notifications|webhook|root)$/i.test(pfx)) return true;
+  if (/service|compte|salle|room|partagé|scanner|bot|robot|générique|support|contact|équipe|team/i.test(name)) return true;
+
+  return false;
+}
+
+function buildOrgTree(){
+  var userMap = {};
+  var children = {};
+  var managerOf = {};
+  var roots = [];
+  var nonRattaches = [];
+  var genericAccounts = [];
+
+  S.rows.forEach(function(r){
+    var u = r.u;
+    var mail = String(u.primaryEmail || '').toLowerCase();
+    userMap[mail] = r;
+  });
+
+  S.rows.forEach(function(r){
+    var u = r.u;
+    var mail = String(u.primaryEmail || '').toLowerCase();
+    if (isGenericAccount(u)){
+      genericAccounts.push(r);
+      return;
+    }
+    var mgrRel = (u.relations || []).filter(function(rel){ return rel.type === 'manager' && rel.value; })[0];
+    var mgrMail = mgrRel ? String(mgrRel.value).toLowerCase() : '';
+
+    if (mgrMail && userMap[mgrMail]){
+      (children[mgrMail] = children[mgrMail] || []).push(mail);
+      managerOf[mail] = mgrMail;
+    }
+  });
+
+  S.rows.forEach(function(r){
+    var u = r.u;
+    var mail = String(u.primaryEmail || '').toLowerCase();
+    if (isGenericAccount(u)) return;
+
+    var mgrMail = managerOf[mail];
+    var hasChildren = children[mail] && children[mail].length > 0;
+
+    if (!mgrMail){
+      if (hasChildren){
+        roots.push(mail);
+      } else {
+        nonRattaches.push(r);
+      }
+    }
+  });
+
+  if (!roots.length && Object.keys(children).length){
+    roots = Object.keys(children);
+  }
+
+  return {
+    userMap: userMap,
+    children: children,
+    roots: roots,
+    nonRattaches: nonRattaches,
+    genericAccounts: genericAccounts
+  };
+}
+
+var S_org = {
+  search: '',
+  hideGeneric: false,
+  collapsed: {}
+};
+
+function renderOrgChart(){
+  var v = document.getElementById('viewOrgchart');
+  var data = buildOrgTree();
+  var userMap = data.userMap;
+  var children = data.children;
+  var roots = data.roots;
+  var nonRattaches = data.nonRattaches;
+  var genericAccounts = data.genericAccounts;
+
+  var q = (S_org.search || '').toLowerCase();
+
+  function renderCard(mail){
+    var r = userMap[mail];
+    if (!r) return '';
+    var u = r.u;
+    var ch = children[mail] || [];
+    var isColl = !!S_org.collapsed[mail];
+    var initials = ((u.name && u.name.givenName || '?')[0] + (u.name && u.name.familyName || '?')[0]).toUpperCase();
+    var orgs = u.organizations || [];
+    var title = orgs.length && orgs[0].title ? orgs[0].title : '';
+    var dept = orgs.length && orgs[0].department ? orgs[0].department : (u.orgUnitPath || '');
+    var isMatch = q && (((u.name && u.name.fullName) || '').toLowerCase().indexOf(q) !== -1 || mail.indexOf(q) !== -1 || title.toLowerCase().indexOf(q) !== -1);
+
+    var html = '<li class="' + (isColl ? 'org-collapsed' : '') + '">';
+    html += '<div class="org-card' + (isMatch ? ' highlight' : '') + '" data-mail="' + esc(mail) + '">';
+    html += '<div class="org-card-top">';
+    html += '<div class="org-card-av">' + (u.thumbnailPhotoUrl ? '<img src="' + esc(u.thumbnailPhotoUrl) + '" alt="">' : initials) + '</div>';
+    html += '<div style="flex:1;min-width:0">';
+    html += '<div class="org-card-name" title="' + esc((u.name && u.name.fullName) || mail) + '">' + esc((u.name && u.name.fullName) || mail) + '</div>';
+    html += '<div class="org-card-title" title="' + esc(title) + '">' + esc(title || mail) + '</div>';
+    html += '</div></div>';
+    if (dept) html += '<div class="org-card-dept" title="' + esc(dept) + '">' + esc(dept) + '</div>';
+
+    if (ch.length){
+      html += '<button class="org-card-toggle" data-toggle="' + esc(mail) + '">' + (isColl ? '+' : '−') + ' ' + ch.length + '</button>';
+    }
+    html += '</div>';
+
+    if (ch.length){
+      html += '<ul>';
+      ch.forEach(function(cMail){
+        html += renderCard(cMail);
+      });
+      html += '</ul>';
+    }
+    html += '</li>';
+    return html;
+  }
+
+  var treeHtml = '';
+  if (!roots.length){
+    treeHtml = '<div class="hint" style="padding:40px;text-align:center;">' + esc(T('orgAucunArbre')) + '</div>';
+  } else {
+    treeHtml = '<div class="org-tree"><ul>' + roots.map(renderCard).join('') + '</ul></div>';
+  }
+
+  var sideNonRattaches = nonRattaches.filter(function(r){
+    if (!q) return true;
+    var u = r.u;
+    return (u.primaryEmail || '').toLowerCase().indexOf(q) !== -1 || ((u.name && u.name.fullName) || '').toLowerCase().indexOf(q) !== -1;
+  });
+
+  var sideGeneric = genericAccounts.filter(function(r){
+    if (!q) return true;
+    var u = r.u;
+    return (u.primaryEmail || '').toLowerCase().indexOf(q) !== -1 || ((u.name && u.name.fullName) || '').toLowerCase().indexOf(q) !== -1;
+  });
+
+  function renderSideItem(r){
+    var u = r.u;
+    var initials = ((u.name && u.name.givenName || '?')[0] + (u.name && u.name.familyName || '?')[0]).toUpperCase();
+    var orgs = u.organizations || [];
+    var sub = orgs.length && orgs[0].title ? orgs[0].title : u.primaryEmail;
+    return '<div class="org-item" data-mail="' + esc(u.primaryEmail) + '">'
+         + '<div class="org-item-av">' + (u.thumbnailPhotoUrl ? '<img src="' + esc(u.thumbnailPhotoUrl) + '" alt="">' : initials) + '</div>'
+         + '<div class="org-item-info">'
+         + '<div class="org-item-name">' + esc((u.name && u.name.fullName) || u.primaryEmail) + '</div>'
+         + '<div class="org-item-sub">' + esc(sub) + '</div>'
+         + '</div></div>';
+  }
+
+  v.innerHTML = '<div class="org-wrap">'
+    + '<div class="org-bar">'
+    + '<input type="text" class="org-search" id="orgSearchInput" placeholder="' + esc(T('orgRechercher')) + '" value="' + esc(S_org.search) + '">'
+    + '<button class="btn" id="btnOrgExpandAll">' + esc(T('orgDeployerTout')) + '</button>'
+    + '<button class="btn" id="btnOrgCollapseAll">' + esc(T('orgReplierTout')) + '</button>'
+    + '<div class="grow"></div>'
+    + '<label class="tchk"><input type="checkbox" id="orgHideGen" ' + (S_org.hideGeneric ? 'checked' : '') + '> ' + esc(T('orgMasquerTech')) + '</label>'
+    + '</div>'
+    + '<div class="org-layout">'
+    + '<div class="org-main">' + treeHtml + '</div>'
+    + '<div class="org-side">'
+    + '<div class="org-panel">'
+    + '<div class="org-panel-h"><strong>' + esc(T('orgSansMgr')) + '</strong><span class="tag f">' + nonRattaches.length + '</span></div>'
+    + '<div class="org-panel-list">' + (sideNonRattaches.length ? sideNonRattaches.map(renderSideItem).join('') : '<div class="hint">Aucun</div>') + '</div>'
+    + '</div>'
+    + (S_org.hideGeneric ? '' : '<div class="org-panel">'
+    + '<div class="org-panel-h"><strong>' + esc(T('orgComptesTech')) + '</strong><span class="tag f">' + genericAccounts.length + '</span></div>'
+    + '<div class="org-panel-list">' + (sideGeneric.length ? sideGeneric.map(renderSideItem).join('') : '<div class="hint">Aucun</div>') + '</div>'
+    + '</div>')
+    + '</div>'
+    + '</div>'
+    + '</div>';
+
+  // Event handlers
+  var searchInput = document.getElementById('orgSearchInput');
+  if (searchInput){
+    searchInput.addEventListener('input', function(){
+      S_org.search = this.value;
+      renderOrgChart();
+      var el = document.getElementById('orgSearchInput');
+      if (el){ el.focus(); el.selectionStart = el.selectionEnd = el.value.length; }
+    });
+  }
+
+  var hideGen = document.getElementById('orgHideGen');
+  if (hideGen){
+    hideGen.addEventListener('change', function(){
+      S_org.hideGeneric = this.checked;
+      renderOrgChart();
+    });
+  }
+
+  var expAll = document.getElementById('btnOrgExpandAll');
+  if (expAll){
+    expAll.addEventListener('click', function(){
+      S_org.collapsed = {};
+      renderOrgChart();
+    });
+  }
+
+  var collAll = document.getElementById('btnOrgCollapseAll');
+  if (collAll){
+    collAll.addEventListener('click', function(){
+      Object.keys(children).forEach(function(m){ S_org.collapsed[m] = true; });
+      renderOrgChart();
+    });
+  }
+
+  v.querySelectorAll('.org-card-toggle').forEach(function(btn){
+    btn.addEventListener('click', function(e){
+      e.stopPropagation();
+      var mail = this.dataset.toggle;
+      S_org.collapsed[mail] = !S_org.collapsed[mail];
+      renderOrgChart();
+    });
+  });
+
+  v.querySelectorAll('[data-mail]').forEach(function(el){
+    el.addEventListener('click', function(){
+      openByEmail(this.dataset.mail);
+    });
+  });
 }
 
 /* ==========================================================================

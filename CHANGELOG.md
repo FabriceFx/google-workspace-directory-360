@@ -2,6 +2,30 @@
 
 Toutes les modifications notables apportées à ce projet seront documentées dans ce fichier. / All notable changes to this project will be documented in this file.
 
+## [1.15.0] - 2026-08-14
+
+### 🇫🇷 Français
+
+**L'arborescence managériale prend vie.**
+
+Un organigramme d'entreprise ne devrait pas être un fichier PowerPoint périmé ou un graphe pollué par des dizaines de comptes génériques (`contact@`, `support@`). Un clic génère désormais l'arborescence hiérarchique interactive en temps réel, isole intelligemment les comptes de service et met en lumière les collaborateurs oubliés sans responsable déclaré.
+
+- ✨ **Organigramme dynamique** : arbre hiérarchique interactif (zoom, déploiement/repli des branches, cartes collaborateur avec photo, poste et département).
+- 🤖 **Détection des comptes génériques** : isolation automatique des comptes techniques, de service et de ressources pour préserver la clarté managériale.
+- ⚠️ **Audit des non-rattachés** : volet latéral dédié identifiant immédiatement les collaborateurs sans manager déclaré (anomalie RH).
+- 🔍 **Recherche et filtres** : recherche en temps réel dans l'arbre et bascule pour masquer/afficher les comptes techniques.
+
+### 🇺🇸 English
+
+**The managerial hierarchy comes to life.**
+
+A corporate org chart shouldn't be an outdated slide deck or a graph cluttered with generic service accounts (`contact@`, `support@`). One click now generates an interactive real-time reporting tree, cleanly isolates service accounts, and highlights members left without a declared manager.
+
+- ✨ **Interactive Org Chart**: real-time reporting tree (zoom, expand/collapse branches, member cards with photo, title, and department).
+- 🤖 **Generic account detection**: automatic isolation of service, shared, and resource accounts to keep the human hierarchy clear.
+- ⚠️ **Unassigned audit**: dedicated side tray identifying members without a manager (HR onboarding anomaly).
+- 🔍 **Search and filters**: instant search highlighting across the tree and toggle to hide/show service accounts.
+
 ## [1.14.0] - 2026-08-13
 
 ### 🇫🇷 Français

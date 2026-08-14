@@ -11,6 +11,7 @@ Tu penses qu'un annuaire d'entreprise n'est qu'une base de contacts statique et 
 Imagine une tour de contrôle qui surveille ta donnée en temps réel, audite automatiquement tes failles (administrateurs sans 2FA, comptes fantômes), mémorise tes requêtes les plus complexes, et t'alerte par e-mail chaque matin avant même ton premier café. Ce n'est plus une promesse lointaine, c'est ce que t'offre **Annuaire 360°**.
 
 ### ✨ Fonctionnalités phares
+- **Organigramme dynamique** : Arborescence managériale interactive en temps réel avec isolation automatique des comptes génériques/techniques et détection des collaborateurs non rattachés.
 - **Data Quality & Anomalies** : Détection automatique des risques (comptes suspendus, sans double authentification, jamais connectés, etc.) via un onglet dédié.
 - **Rapports quotidiens automatiques** : Un déclencheur surveille l'annuaire chaque nuit et vous alerte par e-mail uniquement en cas de nouvelle anomalie (zéro fatigue d'alerte).
 - **Exports Google Sheets sécurisés** : Export direct de vos requêtes vers Google Drive avec neutralisation stricte des risques d'injection de formules (CSV Injection).
@@ -52,6 +53,7 @@ You might think a corporate directory is just a static, boring contact list you 
 Imagine a control tower that monitors your data in real-time, automatically audits vulnerabilities (admins without 2FA, ghost accounts), remembers your most complex queries, and alerts you by email every morning before your first coffee. This is no longer a distant promise—it's exactly what **Directory 360°** delivers.
 
 ### ✨ Key Features
+- **Interactive Org Chart**: Real-time hierarchical tree with smart isolation of generic/service accounts and unassigned member audit.
 - **Data Quality & Anomalies**: Automatic detection of risks (suspended accounts, no 2-step verification, never logged in, etc.) through a dedicated tab.
 - **Automated Daily Reports**: A nightly trigger monitors the directory and emails you only when a new anomaly is detected (zero alert fatigue).
 - **Secure Google Sheets Exports**: Direct export of your queries to Google Drive with strict sanitization against spreadsheet formula injections.

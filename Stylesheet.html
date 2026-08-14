@@ -303,6 +303,60 @@ body.simple #simpleUI{display:block}
 #usageLog td{padding:3px 6px;border-bottom:1px solid #EDF1F3;font-family:var(--mono);font-size:11px;color:var(--txt2)}
 #usageLog td:first-child{white-space:nowrap}
 
+/* --- Organigramme dynamique ------------------------------------------------ */
+.org-wrap{display:flex;flex-direction:column;gap:14px;min-height:400px}
+.org-bar{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--gris);border:1px solid var(--bord);border-radius:var(--r);flex-wrap:wrap}
+.org-bar .grow{flex:1}
+.org-search{border:1px solid var(--bord);border-radius:var(--r);padding:5px 10px;font-size:12.5px;min-width:200px;background:#fff}
+.org-search:focus{outline:none;border-color:var(--bleu)}
+.org-stats{display:flex;gap:8px;font-size:12px;color:var(--txt2);align-items:center}
+.org-stats b{color:var(--txt)}
+
+.org-layout{display:flex;gap:16px;align-items:flex-start}
+.org-main{flex:1;min-width:0;overflow:auto;background:var(--gris);border:1px solid var(--bord);border-radius:var(--r);padding:24px;min-height:500px;max-height:calc(100vh - 270px)}
+.org-side{width:320px;flex:0 0 320px;display:flex;flex-direction:column;gap:14px}
+.org-panel{background:#fff;border:1px solid var(--bord);border-radius:var(--r);padding:14px}
+.org-panel-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.org-panel-h strong{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--bleu)}
+.org-panel-list{display:flex;flex-direction:column;gap:6px;max-height:260px;overflow-y:auto}
+.org-item{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:var(--r);border:1px solid var(--bord);background:var(--gris);cursor:pointer;transition:.12s;font-size:12px}
+.org-item:hover{background:var(--bleu-clair);border-color:var(--bleu-ligne);color:var(--bleu-fonce)}
+.org-item-av{width:24px;height:24px;border-radius:50%;background:var(--bleu-fonce);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;overflow:hidden}
+.org-item-av img{width:100%;height:100%;object-fit:cover}
+.org-item-info{flex:1;min-width:0}
+.org-item-name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.org-item-sub{font-size:10.5px;color:var(--txt3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* --- Arbre hiérarchique CSS ------------------------------------------------- */
+.org-tree{display:flex;justify-content:center;padding:10px 0;width:max-content;min-width:100%}
+.org-tree ul{display:flex;padding-top:20px;position:relative;margin:0;padding-left:0;justify-content:center}
+.org-tree li{display:flex;flex-direction:column;align-items:center;position:relative;padding:20px 10px 0 10px;list-style-type:none}
+
+/* Connecteurs horizontaux et verticaux */
+.org-tree li::before, .org-tree li::after{content:'';position:absolute;top:0;right:50%;border-top:2px solid var(--bord);width:50%;height:20px}
+.org-tree li::after{right:auto;left:50%;border-left:2px solid var(--bord)}
+.org-tree li:only-child::after, .org-tree li:only-child::before{display:none}
+.org-tree li:only-child{padding-top:0}
+.org-tree li:first-child::before{border:0 none}
+.org-tree li:last-child::after{border:0 none}
+.org-tree li:last-child::before{border-right:2px solid var(--bord);border-radius:0 4px 0 0}
+.org-tree li:first-child::after{border-radius:4px 0 0 0}
+.org-tree ul::before{content:'';position:absolute;top:0;left:50%;border-left:2px solid var(--bord);width:0;height:20px}
+
+/* Carte collaborateur dans l'arbre */
+.org-card{background:#fff;border:1px solid var(--bord);border-radius:6px;padding:10px 12px;width:190px;text-align:left;position:relative;cursor:pointer;transition:transform .14s,box-shadow .14s,border-color .14s;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+.org-card:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(26,115,232,.12);border-color:var(--bleu)}
+.org-card.highlight{border-color:var(--rose);box-shadow:0 0 0 2px var(--rose-clair)}
+.org-card-top{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.org-card-av{width:32px;height:32px;border-radius:50%;background:var(--bleu-fonce);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;overflow:hidden}
+.org-card-av img{width:100%;height:100%;object-fit:cover}
+.org-card-name{font-weight:700;font-size:12.5px;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2}
+.org-card-title{font-size:11px;color:var(--txt2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:4px}
+.org-card-dept{font-size:10px;font-weight:600;padding:2px 6px;border-radius:3px;background:var(--bleu-clair);color:var(--bleu-fonce);display:inline-block;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.org-card-toggle{position:absolute;bottom:-10px;left:50%;transform:translateX(-50%);background:#fff;border:1px solid var(--bord);border-radius:10px;padding:1px 6px;font-size:10px;font-weight:700;color:var(--txt2);cursor:pointer;display:flex;align-items:center;gap:3px;box-shadow:0 1px 2px rgba(0,0,0,.08);z-index:2}
+.org-card-toggle:hover{background:var(--bleu-clair);border-color:var(--bleu);color:var(--bleu)}
+.org-collapsed > ul{display:none!important}
+
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
-@media(max-width:900px){.side{display:none}.drawer{width:100%}.toolbar{gap:7px}}
+@media(max-width:900px){.side{display:none}.drawer{width:100%}.toolbar{gap:7px}.org-layout{flex-direction:column}.org-side{width:100%;flex:auto}}
 </style>
