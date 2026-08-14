@@ -170,6 +170,7 @@ function apiBootstrap() {
  * Charge UNE tranche de l'annuaire (CFG.BATCH_SIZE comptes) et rend la main.
  */
 function apiLoadBatch(payload) {
+  var t0 = new Date().getTime();
   var acc = checkAccess_();
   if (!acc.allowed) {
     return { ok: false, errorCode: 'accesRefuse', user: acc.email, reason: acc.reason };
