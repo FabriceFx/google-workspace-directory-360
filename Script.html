@@ -2423,7 +2423,7 @@ function onBatch(res, force, seq){
   S.maxUsers = res.maxUsers || 9000;
 
   // la requête suivante part AVANT l'indexation : réseau et CPU se recouvrent
-  if (res.nextPageToken) nextBatch(res.nextPageToken, force);
+  if (res.nextPageToken) nextBatch(res.nextPageToken, force, seq);
 
   indexRows(res.users || []);
   setProgress(S.rows.length / S.maxUsers, T('comptesIndexes').replace('{n}', nb(S.rows.length)));
